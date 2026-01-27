@@ -1,0 +1,16 @@
+com\lanquiz\service\GameService.class
+com\lanquiz\model\WebSocketMessage$MessageType.class
+com\lanquiz\handler\QuizWebSocketHandler.class
+com\lanquiz\controller\QuizController.class
+com\lanquiz\handler\QuizWebSocketHandler$1.class
+com\lanquiz\model\Quiz$Question.class
+com\lanquiz\config\WebSocketConfig.class
+com\lanquiz\model\Quiz.class
+com\lanquiz\model\WebSocketMessage.class
+com\lanquiz\model\Player.class
+com\lanquiz\repository\QuizRepository.class
+com\lanquiz\repository\GameSessionRepository.class
+com\lanquiz\model\GameSession$GameState.class
+com\lanquiz\model\GameSession.class
+com\lanquiz\QuizApplication.class
+com\lanquiz\config\CorsConfig.class
