@@ -1,14 +1,68 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchQuizzes, createQuiz, Quiz, QuizQuestion } from '@/lib/api';
+import { Quiz, QuizQuestion } from '@/lib/api';
+import { useQuizApi } from '@/hooks/useQuizApi';
+import { useKeyPress } from '@/hooks/useKeyPress';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import ErrorMessage from '@/components/ErrorMessage';
+
+const QuizCard = memo(({ quiz, index, onStart, colorClass }: { 
+  quiz: Quiz; 
+  index: number; 
+  onStart: (id: string) => void;
+  colorClass: string;
+}) => (
+  <div
+    className="glass-card flex flex-col group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
+    style={{ animationDelay: `${index * 0.05}s` }}
+  >
+    <div className="p-6 flex-1 flex flex-col">
+      <div className="flex justify-between items-start mb-5">
+        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold text-xl shadow-lg ring-1 ring-white/20`} aria-hidden="true">
+          {quiz.title.substring(0, 1).toUpperCase()}
+        </div>
+        <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-gray-400">
+          {quiz.questions.length} Qs
+        </span>
+      </div>
+
+      <h3 className="text-xl font-bold mb-2 text-white group-hover:text-emerald-300 transition-colors truncate w-full">
+        {quiz.title}
+      </h3>
+      <p className="text-gray-400 text-sm truncate-2 min-h-[40px] mb-4 leading-relaxed">
+        {quiz.description || 'No description provided.'}
+      </p>
+
+      <div className="flex items-center gap-4 text-xs font-medium text-gray-500 border-t border-white/5 pt-4 mt-auto">
+        <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {quiz.timePerQuestion}s / Q
+        </span>
+      </div>
+    </div>
+
+    <div className="p-4 bg-black/20 border-t border-white/5">
+      <button
+        onClick={() => onStart(quiz.id!)}
+        className="btn btn-primary w-full justify-center transition-all font-bold tracking-wide"
+        aria-label={`Start game with ${quiz.title}`}
+      >
+        Start Game
+      </button>
+    </div>
+  </div>
+));
+QuizCard.displayName = 'QuizCard';
 
 export default function HostPage() {
     const router = useRouter();
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-    const [loading, setLoading] = useState(true);
     const [showCreateForm, setShowCreateForm] = useState(false);
+    const { loading, error, getQuizzes, createNewQuiz } = useQuizApi();
 
     // Quiz Creation State
     const [newQuiz, setNewQuiz] = useState<Quiz>({
@@ -25,20 +79,14 @@ export default function HostPage() {
         points: 100,
     });
 
+    const loadQuizzes = useCallback(async () => {
+        const data = await getQuizzes();
+        setQuizzes(data);
+    }, [getQuizzes]);
+
     useEffect(() => {
         loadQuizzes();
-    }, []);
-
-    const loadQuizzes = async () => {
-        try {
-            const data = await fetchQuizzes();
-            setQuizzes(data);
-        } catch (error) {
-            console.error('Failed to load quizzes:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [loadQuizzes]);
 
     const handleAddQuestion = () => {
         if (currentQuestion.questionText.trim() && currentQuestion.options.every(o => o.trim())) {
@@ -57,8 +105,8 @@ export default function HostPage() {
 
     const handleCreateQuiz = async () => {
         if (newQuiz.title.trim() && newQuiz.questions.length > 0) {
-            try {
-                const created = await createQuiz(newQuiz);
+            const created = await createNewQuiz(newQuiz);
+            if (created) {
                 setQuizzes([...quizzes, created]);
                 setShowCreateForm(false);
                 setNewQuiz({
@@ -67,8 +115,6 @@ export default function HostPage() {
                     questions: [],
                     timePerQuestion: 20,
                 });
-            } catch (error) {
-                console.error('Failed to create quiz:', error);
             }
         }
     };
@@ -83,6 +129,11 @@ export default function HostPage() {
         setCurrentQuestion({ ...currentQuestion, options: newOptions });
     };
 
+    // Keyboard shortcuts
+    useKeyPress('Escape', () => {
+        if (showCreateForm) setShowCreateForm(false);
+    }, [showCreateForm]);
+
     // Decorative colors for quiz avatars
     const avatarColors = [
         'from-emerald-400 to-lime-400',
@@ -95,7 +146,7 @@ export default function HostPage() {
     return (
         <main className="min-h-screen p-6 md:p-12 relative overflow-hidden">
             {/* Background Glows */}
-            <div className="fixed inset-0 pointer-events-none">
+            <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/25 rounded-full blur-[120px]" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/20 rounded-full blur-[120px]" />
             </div>
@@ -108,8 +159,11 @@ export default function HostPage() {
                             <button
                                 onClick={() => router.push('/')}
                                 className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition border border-white/10 hover:text-white"
+                                aria-label="Go to home"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
                             </button>
                             <span>/</span>
                             <span className="text-emerald-300 tracking-wide uppercase text-xs font-bold">Host Dashboard</span>
@@ -123,18 +177,26 @@ export default function HostPage() {
                     <button
                         onClick={() => setShowCreateForm(true)}
                         className="btn btn-primary shadow-lg whitespace-nowrap px-6 py-3 text-sm"
+                        aria-label="Create new quiz"
                     >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
                         Create New Quiz
                     </button>
                 </header>
 
                 {/* Content Area */}
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center py-24 animate-pulse">
-                        <div className="w-16 h-16 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin mb-4" />
-                        <p className="text-gray-400 text-lg">Loading your library...</p>
+                    <div className="flex flex-col items-center justify-center py-24">
+                        <LoadingSpinner size="lg" text="Loading your library..." />
                     </div>
+                ) : error ? (
+                    <ErrorMessage 
+                        title="Failed to load quizzes" 
+                        message={error} 
+                        onRetry={loadQuizzes}
+                    />
                 ) : quizzes.length === 0 ? (
                     <div className="glass-card p-16 text-center max-w-2xl mx-auto animate-fadeIn mt-8 bg-gradient-to-br from-gray-900/50 to-black/50 border border-white/5">
                         <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-gray-800 to-black border border-white/10 flex items-center justify-center shadow-xl">
@@ -143,53 +205,22 @@ export default function HostPage() {
                             </svg>
                         </div>
                         <h3 className="text-2xl font-bold mb-3 text-white">No Quizzes Found</h3>
-                        <p className="text-gray-400 mb-8 max-w-md mx-auto leading-relaxed">It looks like you haven't created any quizzes yet. Start by creating a quiz to host a game.</p>
+                        <p className="text-gray-400 mb-8 max-w-md mx-auto leading-relaxed">It looks like you haven&apos;t created any quizzes yet. Start by creating a quiz to host a game.</p>
                         <button onClick={() => setShowCreateForm(true)} className="btn btn-primary px-8 py-3 transform transition hover:scale-105 active:scale-95">
                             Create First Quiz
                         </button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn pb-12">
-                        {quizzes.map((quiz, index) => {
-                            const colorClass = avatarColors[index % avatarColors.length];
-                            return (
-                                <div
-                                    key={quiz.id || index}
-                                    className="glass-card flex flex-col group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-                                    style={{ animationDelay: `${index * 0.05}s` }}
-                                >
-                                    <div className="p-6 flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-5">
-                                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold text-xl shadow-lg ring-1 ring-white/20`}>
-                                                {quiz.title.substring(0, 1).toUpperCase()}
-                                            </div>
-                                            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-gray-400">
-                                                {quiz.questions.length} Qs
-                                            </span>
-                                        </div>
-
-                                        <h3 className="text-xl font-bold mb-2 text-white group-hover:text-emerald-300 transition-colors truncate w-full">{quiz.title}</h3>
-                                        <p className="text-gray-400 text-sm truncate-2 min-h-[40px] mb-4 leading-relaxed">{quiz.description || 'No description provided.'}</p>
-
-                                        <div className="flex items-center gap-4 text-xs font-medium text-gray-500 border-t border-white/5 pt-4 mt-auto">
-                                            <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                {quiz.timePerQuestion}s / Q
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-4 bg-black/20 border-t border-white/5">
-                                        <button
-                                            onClick={() => handleStartGame(quiz.id!)}
-                                            className="btn btn-primary w-full justify-center transition-all font-bold tracking-wide"
-                                        >
-                                            Start Game
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {quizzes.map((quiz, index) => (
+                            <QuizCard
+                                key={quiz.id || index}
+                                quiz={quiz}
+                                index={index}
+                                onStart={handleStartGame}
+                                colorClass={avatarColors[index % avatarColors.length]}
+                            />
+                        ))}
                     </div>
                 )}
 
