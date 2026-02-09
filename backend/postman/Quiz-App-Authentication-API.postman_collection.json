@@ -1,0 +1,523 @@
+{
+	"info": {
+		"_postman_id": "quiz-app-auth-api",
+		"name": "Quiz Application Authentication API",
+		"description": "Complete API documentation for the Real-Time Quiz Application with JWT authentication",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{authToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"authToken\", jsonData.token);",
+									"    pm.environment.set(\"authToken\", jsonData.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"name\": \"John Doe\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						},
+						"description": "Register a new user account. Returns JWT token upon successful registration."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"name\": \"John Doe\",\n    \"password\": \"password123\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/register",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "auth", "register"]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"email\": \"user@example.com\",\n    \"name\": \"John Doe\",\n    \"expiresIn\": 86400000\n}"
+						}
+					]
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"authToken\", jsonData.token);",
+									"    pm.environment.set(\"authToken\", jsonData.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Login with email and password. Returns JWT token upon successful authentication."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/login",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "auth", "login"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"email\": \"user@example.com\",\n    \"name\": \"John Doe\",\n    \"expiresIn\": 86400000\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "User Profile",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/user/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Get current authenticated user's profile information."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/user/profile",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "user", "profile"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"email\": \"user@example.com\",\n    \"name\": \"John Doe\",\n    \"createdAt\": \"2026-02-09T10:30:00\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Jane Doe\",\n    \"email\": \"newemail@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/user/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "user", "profile"]
+						},
+						"description": "Update current user's profile (name and email)."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Jane Doe\",\n    \"email\": \"newemail@example.com\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/user/profile",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "user", "profile"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"email\": \"newemail@example.com\",\n    \"name\": \"Jane Doe\",\n    \"createdAt\": \"2026-02-09T10:30:00\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"oldPassword\": \"password123\",\n    \"newPassword\": \"newpassword456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/user/change-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "user", "change-password"]
+						},
+						"description": "Change current user's password. Requires old password verification."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"oldPassword\": \"password123\",\n    \"newPassword\": \"newpassword456\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/user/change-password",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "user", "change-password"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Password changed successfully\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Account",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/user/account",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "user", "account"]
+						},
+						"description": "Delete current user's account and all associated quizzes."
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/user/account",
+									"host": ["{{baseUrl}}"],
+									"path": ["api", "user", "account"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Account deleted successfully\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Quizzes",
+			"item": [
+				{
+					"name": "Get All Quizzes",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes"]
+						},
+						"description": "Get all quizzes (public endpoint - no authentication required)."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Quiz by ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "quiz_id_here"
+								}
+							]
+						},
+						"description": "Get a specific quiz by ID (public endpoint - no authentication required)."
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Quizzes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes/my",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes", "my"]
+						},
+						"description": "Get all quizzes created by the authenticated user."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Quiz",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"JavaScript Basics\",\n    \"description\": \"Test your knowledge of JavaScript fundamentals\",\n    \"timePerQuestion\": 30,\n    \"questions\": [\n        {\n            \"questionText\": \"What is the output of typeof null?\",\n            \"options\": [\"null\", \"undefined\", \"object\", \"number\"],\n            \"correctOptionIndex\": 2,\n            \"points\": 100\n        },\n        {\n            \"questionText\": \"Which method is used to parse a string to an integer?\",\n            \"options\": [\"parseInt()\", \"parseInteger()\", \"toInt()\", \"convertInt()\"],\n            \"correctOptionIndex\": 0,\n            \"points\": 100\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes"]
+						},
+						"description": "Create a new quiz. Requires authentication. The quiz will be automatically associated with the authenticated user."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Quiz",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"JavaScript Advanced\",\n    \"description\": \"Updated description\",\n    \"timePerQuestion\": 45,\n    \"questions\": [\n        {\n            \"questionText\": \"What is closure in JavaScript?\",\n            \"options\": [\"A function inside a function\", \"A way to close functions\", \"A type of loop\", \"None of the above\"],\n            \"correctOptionIndex\": 0,\n            \"points\": 150\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "quiz_id_here"
+								}
+							]
+						},
+						"description": "Update an existing quiz. Only the owner can update their quiz."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Quiz",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "quizzes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "quiz_id_here"
+								}
+							]
+						},
+						"description": "Delete a quiz. Only the owner can delete their quiz."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

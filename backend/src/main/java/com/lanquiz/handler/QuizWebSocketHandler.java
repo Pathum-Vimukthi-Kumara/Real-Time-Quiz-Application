@@ -61,6 +61,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void handleCreateGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String quizId = payload.get("quizId");
@@ -82,6 +83,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         sendMessage(session, response);
     }
 
+    @SuppressWarnings("unchecked")
     private void handleJoinGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String pin = payload.get("pin");
@@ -149,6 +151,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) wsMessage.getPayload();
         int answerIndex = (Integer) payload.get("answerIndex");
 
