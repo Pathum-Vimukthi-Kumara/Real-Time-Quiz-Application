@@ -76,33 +76,33 @@ function PlayGameContent() {
         quizSocket.send('SUBMIT_ANSWER', { answerIndex: index });
     };
 
-    const optionColors = ['from-red-500 to-red-600', 'from-blue-500 to-blue-600', 'from-yellow-500 to-yellow-600', 'from-green-500 to-green-600'];
+    const optionColors = ['from-amber-400 to-orange-500', 'from-sky-400 to-cyan-500', 'from-emerald-400 to-lime-500', 'from-teal-400 to-emerald-500'];
 
     if (gameState === 'connecting') {
-        return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" /><p className="text-xl text-gray-400">Connecting...</p></div></div>;
+        return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" /><p className="text-xl text-gray-400">Connecting...</p></div></div>;
     }
 
     return (
         <main className="min-h-screen p-4 flex flex-col">
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-20 left-20 w-72 h-72 bg-purple-500/20 rounded-full blur-[100px]" />
-                <div className="absolute bottom-20 right-20 w-96 h-96 bg-blue-500/20 rounded-full blur-[120px]" />
+                <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/20 rounded-full blur-[100px]" />
+                <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]" />
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center relative z-10">
                 {gameState === 'lobby' && (
                     <div className="text-center animate-fadeIn">
-                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-4xl font-bold">{username?.[0].toUpperCase()}</div>
+                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center text-4xl font-bold text-slate-900">{username?.[0].toUpperCase()}</div>
                         <h1 className="text-3xl font-bold mb-2">{username}</h1>
                         <p className="text-gray-400 mb-8">You&apos;re in! Waiting for host to start...</p>
-                        <div className="animate-bounce"><svg className="w-8 h-8 text-purple-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg></div>
+                        <div className="animate-bounce"><svg className="w-8 h-8 text-emerald-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg></div>
                     </div>
                 )}
 
                 {gameState === 'playing' && currentQuestion && (
                     <div className="w-full max-w-2xl animate-fadeIn">
                         <div className="text-center mb-6">
-                            <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-br from-purple-500 to-pink-500'} mb-4`}>
+                            <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-br from-emerald-400 to-cyan-400'} mb-4 text-slate-900`}>
                                 <span className="text-3xl font-bold">{timeLeft}</span>
                             </div>
                             <p className="text-gray-400 mb-2">Question {currentQuestion.questionIndex + 1} of {currentQuestion.totalQuestions}</p>
@@ -137,8 +137,8 @@ function PlayGameContent() {
                         <h1 className="text-4xl font-bold text-center mb-8 text-gradient">Game Over!</h1>
                         <div className="glass-card p-6 mb-6">
                             {leaderboard.slice(0, 5).map((p, i) => (
-                                <div key={p.id} className={`leaderboard-item ${p.username === username ? 'ring-2 ring-purple-500' : ''}`}>
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold mr-4">{i + 1}</div>
+                                <div key={p.id} className={`leaderboard-item ${p.username === username ? 'ring-2 ring-emerald-400' : ''}`}>
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-900 flex items-center justify-center font-bold mr-4">{i + 1}</div>
                                     <div className="flex-1"><p className="font-semibold">{p.username}</p></div>
                                     <p className="text-xl font-bold text-gradient">{p.score}</p>
                                 </div>
@@ -153,5 +153,5 @@ function PlayGameContent() {
 }
 
 export default function PlayPage() {
-    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" /></div>}><PlayGameContent /></Suspense>;
+    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>}><PlayGameContent /></Suspense>;
 }

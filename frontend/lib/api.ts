@@ -1,6 +1,6 @@
 // API client for REST endpoints
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
 
 export interface Quiz {
     id?: string;
@@ -20,11 +20,17 @@ export interface QuizQuestion {
 }
 
 export async function fetchQuizzes(): Promise<Quiz[]> {
-    const response = await fetch(`${API_BASE_URL}/api/quizzes`);
-    if (!response.ok) {
-        throw new Error('Failed to fetch quizzes');
+    const res = await fetch(`${API_BASE_URL}/api/quizzes`);
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        const msg = `Failed to fetch quizzes: ${res.status} ${res.statusText}${text ? ' - ' + text : ''}`;
+        throw new Error(msg);
     }
-    return response.json();
+    try {
+        return await res.json();
+    } catch (err) {
+        throw new Error('Failed to parse quizzes JSON: ' + String(err));
+    }
 }
 
 export async function fetchQuiz(id: string): Promise<Quiz> {

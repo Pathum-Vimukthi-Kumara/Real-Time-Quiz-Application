@@ -162,9 +162,9 @@ class QuizSocket {
 }
 
 export const getWebSocketUrl = () => {
-    // If we have a specific env var that is NOT localhost, use it.
+    // If we have an env var, use it
     const envUrl = process.env.NEXT_PUBLIC_WS_URL;
-    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    if (envUrl) {
         return envUrl;
     }
 
@@ -172,11 +172,11 @@ export const getWebSocketUrl = () => {
     if (typeof window !== 'undefined') {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const hostname = window.location.hostname;
-        return `${protocol}//${hostname}:8080/ws/quiz`;
+        return `${protocol}//${hostname}:8081/ws/quiz`;
     }
 
-    // Fallback for SSR (shouldn't happen for client connection)
-    return envUrl || 'ws://localhost:8080/ws/quiz';
+    // Fallback for SSR
+    return 'ws://localhost:8081/ws/quiz';
 };
 
 export const quizSocket = new QuizSocket();

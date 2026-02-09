@@ -44,7 +44,7 @@ function HostGameContent() {
         }
     }, [gameState, timeLeft]);
 
-    if (!connected) return <div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" /></div>;
+    if (!connected) return <div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>;
 
     return (
         <main className="min-h-screen p-6">
@@ -62,7 +62,7 @@ function HostGameContent() {
                                 <button onClick={() => quizSocket.send('START_GAME', {})} disabled={players.length === 0} className="btn btn-primary disabled:opacity-50">Start Game</button>
                             </div>
                             {players.length === 0 ? <p className="text-gray-400 py-8">Waiting for players...</p> : (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{players.map((p, i) => <div key={p.id} className="glass p-3 rounded-xl text-center"><div className="w-12 h-12 mx-auto mb-2 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl font-bold">{p.username[0].toUpperCase()}</div><p className="font-medium truncate">{p.username}</p></div>)}</div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{players.map((p, i) => <div key={p.id} className="glass p-3 rounded-xl text-center"><div className="w-12 h-12 mx-auto mb-2 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-900 flex items-center justify-center text-xl font-bold">{p.username[0].toUpperCase()}</div><p className="font-medium truncate">{p.username}</p></div>)}</div>
                             )}
                         </div>
                     </div>
@@ -77,7 +77,7 @@ function HostGameContent() {
                 {gameState === 'ended' && (
                     <div className="animate-fadeIn text-center">
                         <h1 className="text-4xl font-bold mb-4 text-gradient">Game Over!</h1>
-                        <div className="glass-card p-6 mb-6">{leaderboard.map((p, i) => <div key={p.id} className="leaderboard-item"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold mr-4">{i + 1}</div><div className="flex-1 text-left"><p className="font-semibold">{p.username}</p><p className="text-sm text-gray-400">{p.correctAnswers} correct</p></div><p className="text-2xl font-bold text-gradient">{p.score}</p></div>)}</div>
+                        <div className="glass-card p-6 mb-6">{leaderboard.map((p, i) => <div key={p.id} className="leaderboard-item"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-900 flex items-center justify-center font-bold mr-4">{i + 1}</div><div className="flex-1 text-left"><p className="font-semibold">{p.username}</p><p className="text-sm text-gray-400">{p.correctAnswers} correct</p></div><p className="text-2xl font-bold text-gradient">{p.score}</p></div>)}</div>
                         <button onClick={() => router.push('/host')} className="btn btn-primary w-full">Back</button>
                     </div>
                 )}
@@ -87,5 +87,5 @@ function HostGameContent() {
 }
 
 export default function HostGamePage() {
-    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" /></div>}><HostGameContent /></Suspense>;
+    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>}><HostGameContent /></Suspense>;
 }

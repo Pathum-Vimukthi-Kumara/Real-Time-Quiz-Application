@@ -85,19 +85,19 @@ export default function HostPage() {
 
     // Decorative colors for quiz avatars
     const avatarColors = [
-        'from-pink-500 to-rose-500',
-        'from-purple-500 to-indigo-500',
-        'from-cyan-500 to-blue-500',
-        'from-emerald-500 to-teal-500',
-        'from-orange-500 to-amber-500'
+        'from-emerald-400 to-lime-400',
+        'from-cyan-400 to-sky-500',
+        'from-amber-400 to-orange-500',
+        'from-teal-400 to-emerald-500',
+        'from-slate-400 to-slate-600'
     ];
 
     return (
         <main className="min-h-screen p-6 md:p-12 relative overflow-hidden">
             {/* Background Glows */}
             <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px]" />
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/25 rounded-full blur-[120px]" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/20 rounded-full blur-[120px]" />
             </div>
 
             <div className="max-w-7xl mx-auto relative z-10">
@@ -112,7 +112,7 @@ export default function HostPage() {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
                             <span>/</span>
-                            <span className="text-primary tracking-wide uppercase text-xs font-bold">Host Dashboard</span>
+                            <span className="text-emerald-300 tracking-wide uppercase text-xs font-bold">Host Dashboard</span>
                         </div>
                         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
                             Manage Your <span className="text-gradient">Quizzes</span>
@@ -122,7 +122,7 @@ export default function HostPage() {
 
                     <button
                         onClick={() => setShowCreateForm(true)}
-                        className="btn btn-primary shadow-lg shadow-primary/25 whitespace-nowrap px-6 py-3 text-sm"
+                        className="btn btn-primary shadow-lg whitespace-nowrap px-6 py-3 text-sm"
                     >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         Create New Quiz
@@ -132,7 +132,7 @@ export default function HostPage() {
                 {/* Content Area */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-24 animate-pulse">
-                        <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin mb-4" />
+                        <div className="w-16 h-16 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin mb-4" />
                         <p className="text-gray-400 text-lg">Loading your library...</p>
                     </div>
                 ) : quizzes.length === 0 ? (
@@ -155,7 +155,7 @@ export default function HostPage() {
                             return (
                                 <div
                                     key={quiz.id || index}
-                                    className="glass-card flex flex-col group hover:shadow-2xl hover:shadow-primary/10 transition-all duration-300 transform hover:-translate-y-1"
+                                    className="glass-card flex flex-col group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                                     style={{ animationDelay: `${index * 0.05}s` }}
                                 >
                                     <div className="p-6 flex-1 flex flex-col">
@@ -168,7 +168,7 @@ export default function HostPage() {
                                             </span>
                                         </div>
 
-                                        <h3 className="text-xl font-bold mb-2 text-white group-hover:text-primary transition-colors truncate w-full">{quiz.title}</h3>
+                                        <h3 className="text-xl font-bold mb-2 text-white group-hover:text-emerald-300 transition-colors truncate w-full">{quiz.title}</h3>
                                         <p className="text-gray-400 text-sm truncate-2 min-h-[40px] mb-4 leading-relaxed">{quiz.description || 'No description provided.'}</p>
 
                                         <div className="flex items-center gap-4 text-xs font-medium text-gray-500 border-t border-white/5 pt-4 mt-auto">
@@ -182,7 +182,7 @@ export default function HostPage() {
                                     <div className="p-4 bg-black/20 border-t border-white/5">
                                         <button
                                             onClick={() => handleStartGame(quiz.id!)}
-                                            className="btn btn-primary w-full justify-center group-hover:bg-primary-hover group-hover:shadow-lg transition-all font-bold tracking-wide"
+                                            className="btn btn-primary w-full justify-center transition-all font-bold tracking-wide"
                                         >
                                             Start Game
                                         </button>
@@ -196,7 +196,7 @@ export default function HostPage() {
                 {/* Create Quiz Modal */}
                 {showCreateForm && (
                     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-                        <div className="glass-card w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border-2 border-primary/20">
+                        <div className="glass-card w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-400/20">
                             {/* Modal Header */}
                             <div className="px-8 py-6 border-b border-white/10 flex items-center justify-between bg-white/5">
                                 <div>
@@ -236,7 +236,7 @@ export default function HostPage() {
                                                     step="5"
                                                     value={newQuiz.timePerQuestion}
                                                     onChange={(e) => setNewQuiz({ ...newQuiz, timePerQuestion: parseInt(e.target.value) })}
-                                                    className="w-full accent-primary h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                                    className="w-full accent-emerald-400 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                                                 />
                                                 <span className="text-xl font-bold w-12 text-right">{newQuiz.timePerQuestion}s</span>
                                             </div>
@@ -259,11 +259,11 @@ export default function HostPage() {
                                     {/* Question Form */}
                                     <div className="lg:col-span-2 space-y-6">
                                         <h3 className="text-lg font-semibold flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center text-xs">?</div>
+                                            <div className="w-6 h-6 rounded bg-emerald-400/15 text-emerald-300 flex items-center justify-center text-xs">?</div>
                                             Add Question
                                         </h3>
 
-                                        <div className="glass p-6 space-y-6 bg-black/20">
+                                        <div className="glass p-6 space-y-6 bg-black/20 w-full max-w-3xl mx-auto">
                                             <input
                                                 type="text"
                                                 value={currentQuestion.questionText}
@@ -272,7 +272,7 @@ export default function HostPage() {
                                                 className="input text-lg"
                                             />
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mx-auto">
                                                 {currentQuestion.options.map((option, i) => (
                                                     <div key={i} className={`relative group transition-all ${currentQuestion.correctOptionIndex === i ? 'scale-[1.02]' : ''}`}>
                                                         <div className={`absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-colors ${currentQuestion.correctOptionIndex === i
@@ -304,7 +304,7 @@ export default function HostPage() {
                                             <button
                                                 onClick={handleAddQuestion}
                                                 disabled={!currentQuestion.questionText.trim() || !currentQuestion.options.every(o => o.trim())}
-                                                className="btn btn-secondary w-full py-3 border-dashed border-2 hover:border-primary hover:text-primary hover:bg-primary/5 disabled:opacity-50 disabled:hover:border-gray-600 disabled:hover:text-gray-500"
+                                                className="btn btn-secondary w-full py-3 border-dashed border-2 hover:border-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10 disabled:opacity-50 disabled:hover:border-gray-600 disabled:hover:text-gray-500"
                                             >
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
                                                 Add This Question
