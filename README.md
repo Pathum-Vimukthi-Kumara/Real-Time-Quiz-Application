@@ -68,10 +68,10 @@ Set these environment variables or update `application.properties`:
 
 ```bash
 # MongoDB connection string
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/lanquiz
+MONGODB_URI=<your-mongodb-connection-string>
 
 # JWT Secret (256+ bits for HS256)
-JWT_SECRET=YourSuperSecretKeyForJWTTokenGenerationMustBeAtLeast256BitsLong
+JWT_SECRET=<your-secret-key-at-least-256-bits>
 ```
 
 ### 2. Start the Backend
