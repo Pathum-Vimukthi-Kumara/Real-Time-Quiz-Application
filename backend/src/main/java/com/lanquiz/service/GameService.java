@@ -21,7 +21,8 @@ public class GameService {
     }
 
     public GameSession createGame(String quizId, String hostId) {
-        Quiz quiz = quizRepository.findById(quizId)
+        // Verify quiz exists
+        quizRepository.findById(quizId)
                 .orElseThrow(() -> new RuntimeException("Quiz not found"));
 
         GameSession session = new GameSession();
@@ -175,6 +176,18 @@ public class GameService {
 
     public List<Quiz> getAllQuizzes() {
         return quizRepository.findAll();
+    }
+    
+    public List<Quiz> getQuizzesByCreator(String email) {
+        return quizRepository.findByCreatedBy(email);
+    }
+    
+    public Quiz updateQuiz(Quiz quiz) {
+        return quizRepository.save(quiz);
+    }
+    
+    public void deleteQuiz(String quizId) {
+        quizRepository.deleteById(quizId);
     }
 
     private String generatePin() {
