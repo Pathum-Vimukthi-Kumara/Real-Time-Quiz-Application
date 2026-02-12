@@ -306,7 +306,7 @@ export default function HostPage() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mx-auto">
                                                 {currentQuestion.options.map((option, i) => (
                                                     <div key={i} className={`relative group transition-all ${currentQuestion.correctOptionIndex === i ? 'scale-[1.02]' : ''}`}>
-                                                        <div className={`absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-colors ${currentQuestion.correctOptionIndex === i
+                                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-colors ${currentQuestion.correctOptionIndex === i
                                                             ? 'border-green-500 bg-green-500/20 text-green-500'
                                                             : 'border-gray-600 text-gray-500 group-hover:border-gray-400'
                                                             }`}>
@@ -316,8 +316,8 @@ export default function HostPage() {
                                                             type="text"
                                                             value={option}
                                                             onChange={(e) => updateOption(i, e.target.value)}
-                                                            placeholder={`Option ${i + 1}`}
-                                                            className={`input pl-14 ${currentQuestion.correctOptionIndex === i ? '!border-green-500 !bg-green-500/5' : ''}`}
+                                                            placeholder=""
+                                                            className={`input pl-[4.5rem] ${currentQuestion.correctOptionIndex === i ? '!border-green-500 !bg-green-500/5' : ''}`}
                                                         />
                                                         <button
                                                             type="button"
