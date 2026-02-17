@@ -174,7 +174,7 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={() => router.push('/host')}
+                  onClick={() => router.push('/login')}
                   className="glass-card p-8 text-left group hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
                   aria-label="Join as a host"
                 >
