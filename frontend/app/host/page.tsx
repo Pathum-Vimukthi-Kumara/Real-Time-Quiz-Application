@@ -62,7 +62,7 @@ export default function HostPage() {
     const router = useRouter();
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
-    const { loading, error, getQuizzes, createNewQuiz } = useQuizApi();
+    const { loading, error, getMyQuizzes, createNewQuiz } = useQuizApi();
 
     // Quiz Creation State
     const [newQuiz, setNewQuiz] = useState<Quiz>({
@@ -80,9 +80,9 @@ export default function HostPage() {
     });
 
     const loadQuizzes = useCallback(async () => {
-        const data = await getQuizzes();
+        const data = await getMyQuizzes();
         setQuizzes(data);
-    }, [getQuizzes]);
+    }, [getMyQuizzes]);
 
     useEffect(() => {
         loadQuizzes();
