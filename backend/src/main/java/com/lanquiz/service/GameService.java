@@ -99,7 +99,7 @@ public class GameService {
         if (player == null)
             return false;
 
-        player.setTotalAnswers(player.getTotalAnswers() + 1);
+        player.incrementTotalAnswers();
         player.setLastAnswerTime(System.currentTimeMillis());
 
         boolean correct = answerIndex == question.getCorrectOptionIndex();
@@ -109,8 +109,8 @@ public class GameService {
             int timeBonus = Math.max(0, (int) ((quiz.getTimePerQuestion() * 1000 - timeTaken) / 100));
             int points = question.getPoints() + timeBonus;
 
-            player.setScore(player.getScore() + points);
-            player.setCorrectAnswers(player.getCorrectAnswers() + 1);
+            player.addScore(points);
+            player.incrementCorrectAnswers();
         }
 
         return correct;
