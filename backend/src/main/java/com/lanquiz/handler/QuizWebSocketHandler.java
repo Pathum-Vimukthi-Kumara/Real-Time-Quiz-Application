@@ -35,6 +35,8 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, String> sessionToPlayer = new ConcurrentHashMap<>();
     // Tracks last pong time for heartbeat monitoring
     private final Map<String, Long> lastPongTime = new ConcurrentHashMap<>();
+    // Tracks sequence numbers for outgoing messages per session
+    private final Map<String, Long> sequenceNumbers = new ConcurrentHashMap<>();
 
     public QuizWebSocketHandler(GameService gameService) {
         this.gameService = gameService;
@@ -44,6 +46,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         logger.info("WebSocket connection established: {}", session.getId());
         lastPongTime.put(session.getId(), System.currentTimeMillis());
+        sequenceNumbers.put(session.getId(), 0L);
     }
 
     @Override
@@ -283,6 +286,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         String pin = sessionToGame.remove(session.getId());
         String playerId = sessionToPlayer.remove(session.getId());
         lastPongTime.remove(session.getId());
+        sequenceNumbers.remove(session.getId());
 
         if (pin != null) {
             Set<WebSocketSession> sessions = gameSessions.get(pin);
@@ -322,8 +326,16 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
+        // Set sequence number for this message
+        Long seqNum = getNextSequenceNumber(session.getId());
+        message.setSequenceNumber(seqNum);
+        
         String json = objectMapper.writeValueAsString(message);
         session.sendMessage(new TextMessage(json));
+    }
+
+    private Long getNextSequenceNumber(String sessionId) {
+        return sequenceNumbers.compute(sessionId, (k, v) -> (v == null ? 0L : v) + 1);
     }
 
     private void sendError(WebSocketSession session, String errorMessage) throws IOException {

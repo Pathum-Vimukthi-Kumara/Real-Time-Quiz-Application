@@ -10,12 +10,22 @@ public class WebSocketMessage {
     private Object payload;
     private String sessionId;
     private String playerId;
+    private Long sequenceNumber;
 
     public WebSocketMessage(MessageType type, Object payload, String sessionId, String playerId) {
         this.type = type;
         this.payload = payload;
         this.sessionId = sessionId;
         this.playerId = playerId;
+        this.sequenceNumber = null;
+    }
+
+    public WebSocketMessage(MessageType type, Object payload, String sessionId, String playerId, Long sequenceNumber) {
+        this.type = type;
+        this.payload = payload;
+        this.sessionId = sessionId;
+        this.playerId = playerId;
+        this.sequenceNumber = sequenceNumber;
     }
 
     public enum MessageType {

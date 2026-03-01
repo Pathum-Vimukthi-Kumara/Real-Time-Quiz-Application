@@ -22,6 +22,7 @@ export interface WebSocketMessage {
     payload: unknown;
     sessionId?: string;
     playerId?: string;
+    sequenceNumber?: number;
 }
 
 export interface Player {
@@ -51,6 +52,8 @@ class QuizSocket {
     private reconnectTimeoutId: NodeJS.Timeout | null = null;
     private baseReconnectDelay = 1000; // Start with 1 second
     private maxReconnectDelay = 30000; // Cap at 30 seconds
+    private clientSequenceNumber = 0; // Sequence for outgoing messages
+    private expectedServerSequence = 1; // Expected sequence from server (starts at 1)
 
     connect(serverUrl: string): Promise<void> {
         // If already connected to the same URL, do nothing
@@ -81,12 +84,26 @@ class QuizSocket {
                 this.ws.onopen = () => {
                     console.log('WebSocket connected');
                     this.reconnectAttempts = 0;
+                    this.clientSequenceNumber = 0;
+                    this.expectedServerSequence = 1;
                     resolve();
                 };
 
                 this.ws.onmessage = (event) => {
                     try {
                         const message: WebSocketMessage = JSON.parse(event.data);
+                        
+                        // Validate sequence number if present
+                        if (message.sequenceNumber !== undefined) {
+                            if (message.sequenceNumber < this.expectedServerSequence) {
+                                console.warn(`Duplicate message detected. Expected seq ${this.expectedServerSequence}, got ${message.sequenceNumber}`);
+                                return; // Ignore duplicate
+                            } else if (message.sequenceNumber > this.expectedServerSequence) {
+                                console.warn(`Out-of-order message detected. Expected seq ${this.expectedServerSequence}, got ${message.sequenceNumber}`);
+                            }
+                            this.expectedServerSequence = message.sequenceNumber + 1;
+                        }
+                        
                         console.log('Received:', message.type, message.payload);
 
                         const handlers = this.messageHandlers.get(message.type);
@@ -158,8 +175,13 @@ class QuizSocket {
 
     send(type: MessageType, payload: unknown) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            const message: WebSocketMessage = { type, payload };
-            console.log('Sending:', type, payload);
+            this.clientSequenceNumber++;
+            const message: WebSocketMessage = { 
+                type, 
+                payload,
+                sequenceNumber: this.clientSequenceNumber 
+            };
+            console.log('Sending:', type, payload, 'seq:', this.clientSequenceNumber);
             this.ws.send(JSON.stringify(message));
         } else {
             console.error('WebSocket is not connected');
