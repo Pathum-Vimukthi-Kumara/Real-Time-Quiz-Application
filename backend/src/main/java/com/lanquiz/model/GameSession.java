@@ -21,6 +21,7 @@ public class GameSession {
     private GameState state;
     private int currentQuestionIndex;
     private Map<String, Player> players = new ConcurrentHashMap<>();
+    private Map<String, String> reconnectionTokens = new ConcurrentHashMap<>(); // token -> playerId
     private long questionStartTime;
     private String hostId;
 

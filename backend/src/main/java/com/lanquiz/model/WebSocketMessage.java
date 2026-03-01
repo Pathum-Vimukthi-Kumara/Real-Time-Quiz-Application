@@ -32,6 +32,7 @@ public class WebSocketMessage {
         // Client -> Server
         CREATE_GAME,
         JOIN_GAME,
+        RECONNECT_GAME,
         START_GAME,
         SUBMIT_ANSWER,
         NEXT_QUESTION,
@@ -40,6 +41,7 @@ public class WebSocketMessage {
         // Server -> Client
         GAME_CREATED,
         PLAYER_JOINED,
+        PLAYER_RECONNECTED,
         PLAYER_LEFT,
         GAME_STARTED,
         QUESTION,

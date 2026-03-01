@@ -50,7 +50,13 @@ public class GameService {
         }
 
         Player player = new Player(playerId, username, 0, 0, 0, 0);
+        
+        // Generate reconnection token
+        String reconnectionToken = UUID.randomUUID().toString();
+        player.setReconnectionToken(reconnectionToken);
+        
         session.getPlayers().put(playerId, player);
+        session.getReconnectionTokens().put(reconnectionToken, playerId);
 
         return session;
     }
@@ -157,8 +163,37 @@ public class GameService {
     public void removePlayer(String pin, String playerId) {
         GameSession session = activeSessions.get(pin);
         if (session != null) {
-            session.getPlayers().remove(playerId);
+            Player player = session.getPlayers().get(playerId);
+            if (player != null && player.getReconnectionToken() != null) {
+                // Keep player in session for potential reconnection, just mark as disconnected
+                // Don't remove from session.getPlayers() or reconnectionTokens map
+            }
         }
+    }
+
+    public GameSession reconnectPlayer(String pin, String reconnectionToken, String newSessionId) {
+        GameSession session = activeSessions.get(pin);
+        if (session == null) {
+            throw new RuntimeException("Game not found");
+        }
+
+        String playerId = session.getReconnectionTokens().get(reconnectionToken);
+        if (playerId == null) {
+            throw new RuntimeException("Invalid reconnection token");
+        }
+
+        Player player = session.getPlayers().get(playerId);
+        if (player == null) {
+            throw new RuntimeException("Player not found in session");
+        }
+
+        // Update player ID to new session ID
+        session.getPlayers().remove(playerId);
+        player.setId(newSessionId);
+        session.getPlayers().put(newSessionId, player);
+        session.getReconnectionTokens().put(reconnectionToken, newSessionId);
+
+        return session;
     }
 
     public GameSession getSession(String pin) {

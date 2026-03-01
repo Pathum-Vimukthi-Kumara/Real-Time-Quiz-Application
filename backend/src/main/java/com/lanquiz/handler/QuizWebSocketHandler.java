@@ -2,6 +2,7 @@ package com.lanquiz.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lanquiz.model.GameSession;
+import com.lanquiz.model.Player;
 import com.lanquiz.model.Quiz;
 import com.lanquiz.model.WebSocketMessage;
 import com.lanquiz.service.GameService;
@@ -58,6 +59,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
             switch (wsMessage.getType()) {
                 case CREATE_GAME -> handleCreateGame(session, wsMessage);
                 case JOIN_GAME -> handleJoinGame(session, wsMessage);
+                case RECONNECT_GAME -> handleReconnectGame(session, wsMessage);
                 case START_GAME -> handleStartGame(session, wsMessage);
                 case SUBMIT_ANSWER -> handleSubmitAnswer(session, wsMessage);
                 case NEXT_QUESTION -> handleNextQuestion(session, wsMessage);
@@ -107,18 +109,20 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         String playerId = session.getId();
 
         GameSession gameSession = gameService.joinGame(pin, playerId, username);
+        Player player = gameSession.getPlayers().get(playerId);
 
         // Register player session
         gameSessions.computeIfAbsent(pin, k -> ConcurrentHashMap.newKeySet()).add(session);
         sessionToGame.put(session.getId(), pin);
         sessionToPlayer.put(session.getId(), playerId);
 
-        // Notify the joining player
+        // Notify the joining player with reconnection token
         WebSocketMessage response = new WebSocketMessage(
                 WebSocketMessage.MessageType.PLAYER_JOINED,
                 Map.of(
                         "playerId", playerId,
                         "username", username,
+                        "reconnectionToken", player.getReconnectionToken(),
                         "players", gameSession.getPlayers().values()),
                 gameSession.getId(),
                 playerId);
@@ -126,6 +130,70 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
 
         // Broadcast to all players in the game
         broadcastToGame(pin, response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleReconnectGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+        Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
+        String pin = payload.get("pin");
+        String reconnectionToken = payload.get("reconnectionToken");
+        String newSessionId = session.getId();
+
+        try {
+            GameSession gameSession = gameService.reconnectPlayer(pin, reconnectionToken, newSessionId);
+            Player player = gameSession.getPlayers().get(newSessionId);
+
+            // Register player session
+            gameSessions.computeIfAbsent(pin, k -> ConcurrentHashMap.newKeySet()).add(session);
+            sessionToGame.put(session.getId(), pin);
+            sessionToPlayer.put(session.getId(), newSessionId);
+
+            // Get current game state
+            Map<String, Object> responsePayload = new HashMap<>();
+            responsePayload.put("playerId", newSessionId);
+            responsePayload.put("username", player.getUsername());
+            responsePayload.put("reconnectionToken", player.getReconnectionToken());
+            responsePayload.put("players", gameSession.getPlayers().values());
+            responsePayload.put("gameState", gameSession.getState());
+            responsePayload.put("currentQuestionIndex", gameSession.getCurrentQuestionIndex());
+
+            // If game is in progress, include current question
+            if (gameSession.getState() == GameSession.GameState.IN_PROGRESS) {
+                Quiz.Question question = gameService.getCurrentQuestion(pin);
+                Quiz quiz = gameService.getQuiz(gameSession.getQuizId());
+                if (question != null && quiz != null) {
+                    responsePayload.put("questionText", question.getQuestionText());
+                    responsePayload.put("options", question.getOptions());
+                    responsePayload.put("points", question.getPoints());
+                    responsePayload.put("timeLimit", quiz.getTimePerQuestion());
+                    responsePayload.put("totalQuestions", quiz.getQuestions().size());
+                }
+            }
+
+            // Notify the reconnected player
+            WebSocketMessage response = new WebSocketMessage(
+                    WebSocketMessage.MessageType.PLAYER_RECONNECTED,
+                    responsePayload,
+                    gameSession.getId(),
+                    newSessionId);
+            sendMessage(session, response);
+
+            // Broadcast reconnection to other players
+            WebSocketMessage notification = new WebSocketMessage(
+                    WebSocketMessage.MessageType.PLAYER_RECONNECTED,
+                    Map.of(
+                            "playerId", newSessionId,
+                            "username", player.getUsername(),
+                            "players", gameSession.getPlayers().values()),
+                    gameSession.getId(),
+                    null);
+            broadcastToGame(pin, notification);
+
+            logger.info("Player {} reconnected to game {}", player.getUsername(), pin);
+        } catch (Exception e) {
+            logger.error("Error reconnecting player: {}", e.getMessage());
+            sendError(session, "Failed to reconnect: " + e.getMessage());
+        }
     }
 
     private void handleStartGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {

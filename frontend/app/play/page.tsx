@@ -17,6 +17,7 @@ function PlayGameContent() {
     const [timeLeft, setTimeLeft] = useState(0);
     const [leaderboard, setLeaderboard] = useState<Player[]>([]);
     const [myScore, setMyScore] = useState(0);
+    const [playerId, setPlayerId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!pin || !username) { router.push('/'); return; }
@@ -24,9 +25,53 @@ function PlayGameContent() {
         const serverUrl = getWebSocketUrl();
 
         quizSocket.connect(serverUrl).then(() => {
-            quizSocket.send('JOIN_GAME', { pin, username });
+            // Check if we have reconnection data
+            const reconnectionData = quizSocket.getReconnectionData();
+            
+            if (reconnectionData && reconnectionData.pin === pin) {
+                // Attempt to reconnect
+                console.log('Attempting to reconnect with token');
+                quizSocket.send('RECONNECT_GAME', { 
+                    pin: reconnectionData.pin, 
+                    reconnectionToken: reconnectionData.reconnectionToken 
+                });
+            } else {
+                // Fresh join
+                quizSocket.send('JOIN_GAME', { pin, username });
+            }
             setGameState('lobby');
         }).catch(() => router.push('/'));
+
+        quizSocket.on('PLAYER_JOINED', (p) => {
+            const data = p as { playerId: string; username: string; reconnectionToken: string };
+            if (data.username === username) {
+                // Save reconnection data for this player
+                setPlayerId(data.playerId);
+                quizSocket.saveReconnectionData(pin, data.reconnectionToken, data.playerId, username);
+                console.log('Saved reconnection token');
+            }
+        });
+
+        quizSocket.on('PLAYER_RECONNECTED', (p) => {
+            const data = p as any;
+            if (data.username === username) {
+                console.log('Successfully reconnected!');
+                setPlayerId(data.playerId);
+                
+                // Restore game state if in progress
+                if (data.gameState === 'IN_PROGRESS' && data.questionText) {
+                    setCurrentQuestion({
+                        questionIndex: data.currentQuestionIndex,
+                        questionText: data.questionText,
+                        options: data.options,
+                        points: data.points,
+                        timeLimit: data.timeLimit,
+                        totalQuestions: data.totalQuestions
+                    });
+                    setGameState('playing');
+                }
+            }
+        });
 
         quizSocket.on('GAME_STARTED', (p) => {
             const q = p as Question;
@@ -58,9 +103,14 @@ function PlayGameContent() {
         quizSocket.on('GAME_ENDED', (p) => {
             setLeaderboard((p as { leaderboard: Player[] }).leaderboard);
             setGameState('ended');
+            // Clear reconnection data when game ends
+            quizSocket.clearReconnectionData();
         });
 
-        return () => { quizSocket.disconnect(); };
+        return () => { 
+            quizSocket.disconnect();
+            // Don't clear reconnection data on unmount - only on game end or explicit exit
+        };
     }, [pin, username, router]);
 
     useEffect(() => {

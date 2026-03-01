@@ -3,12 +3,14 @@
 export type MessageType =
     | 'CREATE_GAME'
     | 'JOIN_GAME'
+    | 'RECONNECT_GAME'
     | 'START_GAME'
     | 'SUBMIT_ANSWER'
     | 'NEXT_QUESTION'
     | 'END_GAME'
     | 'GAME_CREATED'
     | 'PLAYER_JOINED'
+    | 'PLAYER_RECONNECTED'
     | 'PLAYER_LEFT'
     | 'GAME_STARTED'
     | 'QUESTION'
@@ -205,6 +207,33 @@ class QuizSocket {
             this.ws.onclose = null;
             this.ws.close();
             this.ws = null;
+        }
+    }
+
+    saveReconnectionData(pin: string, reconnectionToken: string, playerId: string, username: string) {
+        if (typeof window !== 'undefined') {
+            const data = { pin, reconnectionToken, playerId, username };
+            localStorage.setItem('gameReconnectionData', JSON.stringify(data));
+        }
+    }
+
+    getReconnectionData(): { pin: string; reconnectionToken: string; playerId: string; username: string } | null {
+        if (typeof window !== 'undefined') {
+            const data = localStorage.getItem('gameReconnectionData');
+            if (data) {
+                try {
+                    return JSON.parse(data);
+                } catch {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    clearReconnectionData() {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('gameReconnectionData');
         }
     }
 

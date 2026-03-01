@@ -9,6 +9,7 @@ public class Player {
     private AtomicInteger correctAnswers;
     private AtomicInteger totalAnswers;
     private long lastAnswerTime;
+    private String reconnectionToken;
 
     public Player() {
         this.score = new AtomicInteger(0);
@@ -23,6 +24,7 @@ public class Player {
         this.correctAnswers = new AtomicInteger(correctAnswers);
         this.totalAnswers = new AtomicInteger(totalAnswers);
         this.lastAnswerTime = lastAnswerTime;
+        this.reconnectionToken = null;
     }
 
     public String getId() {
@@ -83,5 +85,13 @@ public class Player {
 
     public void setLastAnswerTime(long lastAnswerTime) {
         this.lastAnswerTime = lastAnswerTime;
+    }
+
+    public String getReconnectionToken() {
+        return reconnectionToken;
+    }
+
+    public void setReconnectionToken(String reconnectionToken) {
+        this.reconnectionToken = reconnectionToken;
     }
 }
