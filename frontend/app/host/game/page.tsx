@@ -3,11 +3,13 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { useToast } from '@/contexts/ToastContext';
 
 function HostGameContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const quizId = searchParams.get('quizId');
+    const { addToast } = useToast();
 
     const [gamePin, setGamePin] = useState<string>('');
     const [players, setPlayers] = useState<Player[]>([]);
@@ -16,6 +18,7 @@ function HostGameContent() {
     const [timeLeft, setTimeLeft] = useState(0);
     const [leaderboard, setLeaderboard] = useState<Player[]>([]);
     const [connected, setConnected] = useState(false);
+    const [latency, setLatency] = useState(0);
 
     useEffect(() => {
         if (!quizId) { router.push('/host'); return; }
@@ -33,6 +36,12 @@ function HostGameContent() {
         quizSocket.on('GAME_STARTED', (p) => { setCurrentQuestion(p as Question); setTimeLeft((p as Question).timeLimit); setGameState('playing'); });
         quizSocket.on('QUESTION', (p) => { setCurrentQuestion(p as Question); setTimeLeft((p as Question).timeLimit); setGameState('playing'); });
         quizSocket.on('GAME_ENDED', (p) => { setLeaderboard((p as { leaderboard: Player[] }).leaderboard); setGameState('ended'); });
+        
+        quizSocket.on('SERVER_SHUTDOWN', (p) => {
+            const data = p as { message: string };
+            addToast(data.message || 'Server is shutting down. Returning to home page.', 'warning');
+            setTimeout(() => router.push('/host'), 2000);
+        });
 
         return () => { quizSocket.disconnect(); };
     }, [quizId, router]);
@@ -44,10 +53,38 @@ function HostGameContent() {
         }
     }, [gameState, timeLeft]);
 
+    useEffect(() => {
+        // Update latency display every second
+        const interval = setInterval(() => {
+            setLatency(quizSocket.getLatency());
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     if (!connected) return <div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /></div>;
 
     return (
         <main className="min-h-screen p-6">
+            {/* Latency indicator */}
+            {latency > 0 && (
+                <div className="fixed top-4 right-4 z-50 pointer-events-none">
+                    <div className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
+                        latency < 50 ? 'bg-green-500/20 text-green-400' :
+                        latency < 100 ? 'bg-yellow-500/20 text-yellow-400' :
+                        latency < 200 ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-red-500/20 text-red-400'
+                    }`}>
+                        <span className="inline-block w-2 h-2 rounded-full mr-1.5 animate-pulse ${
+                            latency < 50 ? 'bg-green-400' :
+                            latency < 100 ? 'bg-yellow-400' :
+                            latency < 200 ? 'bg-orange-400' :
+                            'bg-red-400'
+                        }" />
+                        {latency}ms
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-4xl mx-auto relative z-10">
                 {gameState === 'lobby' && (
                     <div className="animate-fadeIn text-center">

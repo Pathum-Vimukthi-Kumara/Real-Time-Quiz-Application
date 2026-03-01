@@ -1,5 +1,6 @@
 package com.lanquiz.controller;
 
+import com.lanquiz.model.GameSession;
 import com.lanquiz.model.Quiz;
 import com.lanquiz.service.GameService;
 import com.lanquiz.exception.UnauthorizedException;
@@ -104,5 +105,12 @@ public class QuizController {
         Map<String, String> response = new HashMap<>();
         response.put("message", "Quiz deleted successfully");
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/game-history")
+    public ResponseEntity<List<GameSession>> getGameHistory() {
+        String email = getCurrentUserEmail();
+        List<GameSession> completedGames = gameService.getCompletedGamesByHost(email);
+        return ResponseEntity.ok(completedGames);
     }
 }

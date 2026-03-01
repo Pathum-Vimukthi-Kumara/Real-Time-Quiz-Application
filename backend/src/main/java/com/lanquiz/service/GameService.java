@@ -3,6 +3,8 @@ package com.lanquiz.service;
 import com.lanquiz.model.*;
 import com.lanquiz.repository.GameSessionRepository;
 import com.lanquiz.repository.QuizRepository;
+import jakarta.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -20,6 +22,24 @@ public class GameService {
         this.gameSessionRepository = gameSessionRepository;
     }
 
+    // Restore in-progress games from DB on server startup
+    @PostConstruct
+    public void loadActiveGames() {
+        List<GameSession> inProgressGames = gameSessionRepository.findByStateNot(GameSession.GameState.FINISHED);
+        for (GameSession session : inProgressGames) {
+            activeSessions.put(session.getPin(), session);
+        }
+        if (!inProgressGames.isEmpty()) {
+            System.out.println("Restored " + inProgressGames.size() + " active game session(s) from database.");
+        }
+    }
+
+    // Persist game session to DB asynchronously (non-blocking)
+    @Async
+    public void saveSessionAsync(GameSession session) {
+        gameSessionRepository.save(session);
+    }
+
     public GameSession createGame(String quizId, String hostId) {
         // Verify quiz exists
         quizRepository.findById(quizId)
@@ -32,6 +52,7 @@ public class GameService {
         session.setState(GameSession.GameState.WAITING);
         session.setCurrentQuestionIndex(-1);
         session.setHostId(hostId);
+        session.setCreatedAt(System.currentTimeMillis());
 
         activeSessions.put(session.getPin(), session);
         gameSessionRepository.save(session);
@@ -50,7 +71,13 @@ public class GameService {
         }
 
         Player player = new Player(playerId, username, 0, 0, 0, 0);
+        
+        // Generate reconnection token
+        String reconnectionToken = UUID.randomUUID().toString();
+        player.setReconnectionToken(reconnectionToken);
+        
         session.getPlayers().put(playerId, player);
+        session.getReconnectionTokens().put(reconnectionToken, playerId);
 
         return session;
     }
@@ -93,25 +120,45 @@ public class GameService {
         Quiz quiz = quizRepository.findById(session.getQuizId())
                 .orElseThrow(() -> new RuntimeException("Quiz not found"));
 
-        Quiz.Question question = quiz.getQuestions().get(session.getCurrentQuestionIndex());
+        int currentQuestionIndex = session.getCurrentQuestionIndex();
+        Quiz.Question question = quiz.getQuestions().get(currentQuestionIndex);
         Player player = session.getPlayers().get(playerId);
 
         if (player == null)
             return false;
 
-        player.setTotalAnswers(player.getTotalAnswers() + 1);
-        player.setLastAnswerTime(System.currentTimeMillis());
+        // Rate limiting: Check if player already answered this question
+        if (player.getLastAnsweredQuestionIndex() == currentQuestionIndex) {
+            throw new RuntimeException("You have already answered this question");
+        }
+
+        // Rate limiting: Prevent rapid submissions (minimum 500ms between attempts)
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastAttempt = currentTime - player.getLastSubmissionAttemptTime();
+        if (player.getLastSubmissionAttemptTime() > 0 && timeSinceLastAttempt < 500) {
+            throw new RuntimeException("Please wait before submitting again");
+        }
+
+        // Update rate limit tracking
+        player.setLastSubmissionAttemptTime(currentTime);
+        player.setLastAnsweredQuestionIndex(currentQuestionIndex);
+        
+        player.incrementTotalAnswers();
+        player.setLastAnswerTime(currentTime);
 
         boolean correct = answerIndex == question.getCorrectOptionIndex();
         if (correct) {
             // Calculate score based on time taken
-            long timeTaken = System.currentTimeMillis() - session.getQuestionStartTime();
+            long timeTaken = currentTime - session.getQuestionStartTime();
             int timeBonus = Math.max(0, (int) ((quiz.getTimePerQuestion() * 1000 - timeTaken) / 100));
             int points = question.getPoints() + timeBonus;
 
-            player.setScore(player.getScore() + points);
-            player.setCorrectAnswers(player.getCorrectAnswers() + 1);
+            player.addScore(points);
+            player.incrementCorrectAnswers();
         }
+
+        // Persist updated scores to DB without blocking the WebSocket thread
+        saveSessionAsync(session);
 
         return correct;
     }
@@ -134,6 +181,9 @@ public class GameService {
             session.setState(GameSession.GameState.IN_PROGRESS);
         }
 
+        // Persist question progress to DB without blocking the WebSocket thread
+        saveSessionAsync(session);
+
         return session;
     }
 
@@ -154,11 +204,63 @@ public class GameService {
         return players;
     }
 
+    public GameSession endGame(String pin) {
+        GameSession session = activeSessions.get(pin);
+        if (session == null) {
+            throw new RuntimeException("Game not found");
+        }
+
+        // Mark game as finished
+        session.setState(GameSession.GameState.FINISHED);
+        session.setCompletedAt(System.currentTimeMillis());
+        
+        // Save final leaderboard
+        List<Player> finalLeaderboard = getLeaderboard(pin);
+        session.setFinalLeaderboard(finalLeaderboard);
+        
+        // Persist to database
+        gameSessionRepository.save(session);
+        
+        // Remove from active sessions
+        activeSessions.remove(pin);
+        
+        return session;
+    }
+
     public void removePlayer(String pin, String playerId) {
         GameSession session = activeSessions.get(pin);
         if (session != null) {
-            session.getPlayers().remove(playerId);
+            Player player = session.getPlayers().get(playerId);
+            if (player != null && player.getReconnectionToken() != null) {
+                // Keep player in session for potential reconnection, just mark as disconnected
+                // Don't remove from session.getPlayers() or reconnectionTokens map
+            }
         }
+    }
+
+    public GameSession reconnectPlayer(String pin, String reconnectionToken, String newSessionId) {
+        GameSession session = activeSessions.get(pin);
+        if (session == null) {
+            throw new RuntimeException("Game not found");
+        }
+
+        String playerId = session.getReconnectionTokens().get(reconnectionToken);
+        if (playerId == null) {
+            throw new RuntimeException("Invalid reconnection token");
+        }
+
+        Player player = session.getPlayers().get(playerId);
+        if (player == null) {
+            throw new RuntimeException("Player not found in session");
+        }
+
+        // Update player ID to new session ID
+        session.getPlayers().remove(playerId);
+        player.setId(newSessionId);
+        session.getPlayers().put(newSessionId, player);
+        session.getReconnectionTokens().put(reconnectionToken, newSessionId);
+
+        return session;
     }
 
     public GameSession getSession(String pin) {
@@ -188,6 +290,10 @@ public class GameService {
     
     public void deleteQuiz(String quizId) {
         quizRepository.deleteById(quizId);
+    }
+
+    public List<GameSession> getCompletedGamesByHost(String hostId) {
+        return gameSessionRepository.findByHostIdAndStateOrderByCompletedAtDesc(hostId, GameSession.GameState.FINISHED);
     }
 
     private String generatePin() {
