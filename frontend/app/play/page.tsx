@@ -21,6 +21,7 @@ function PlayGameContent() {
     const [myScore, setMyScore] = useState(0);
     const [playerId, setPlayerId] = useState<string | null>(null);
     const [lastSubmissionTime, setLastSubmissionTime] = useState(0);
+    const [latency, setLatency] = useState(0);
 
     useEffect(() => {
         if (!pin || !username) { router.push('/'); return; }
@@ -130,6 +131,14 @@ function PlayGameContent() {
         }
     }, [gameState, timeLeft]);
 
+    useEffect(() => {
+        // Update latency display every second
+        const interval = setInterval(() => {
+            setLatency(quizSocket.getLatency());
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     const submitAnswer = (index: number) => {
         if (selectedAnswer !== null) return;
         
@@ -154,6 +163,26 @@ function PlayGameContent() {
 
     return (
         <main className="min-h-screen p-4 flex flex-col">
+            {/* Latency indicator */}
+            {latency > 0 && (
+                <div className="fixed top-4 right-4 z-50 pointer-events-none">
+                    <div className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
+                        latency < 50 ? 'bg-green-500/20 text-green-400' :
+                        latency < 100 ? 'bg-yellow-500/20 text-yellow-400' :
+                        latency < 200 ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-red-500/20 text-red-400'
+                    }`}>
+                        <span className="inline-block w-2 h-2 rounded-full mr-1.5 animate-pulse ${
+                            latency < 50 ? 'bg-green-400' :
+                            latency < 100 ? 'bg-yellow-400' :
+                            latency < 200 ? 'bg-orange-400' :
+                            'bg-red-400'
+                        }" />
+                        {latency}ms
+                    </div>
+                </div>
+            )}
+
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/20 rounded-full blur-[100px]" />
                 <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]" />

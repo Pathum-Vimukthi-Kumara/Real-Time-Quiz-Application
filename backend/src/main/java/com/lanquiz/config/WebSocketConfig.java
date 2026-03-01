@@ -55,6 +55,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
             URI uri = request.getURI();
             String query = uri.getQuery();
             
+            // Optional JWT authentication: hosts provide tokens, players don't
             if (query != null && query.contains("token=")) {
                 String token = extractToken(query);
                 
@@ -63,19 +64,27 @@ public class WebSocketConfig implements WebSocketConfigurer {
                         if (jwtUtil.validateToken(token)) {
                             String userEmail = jwtUtil.extractEmail(token);
                             attributes.put("userEmail", userEmail);
-                            logger.info("WebSocket authentication successful for user: {}", userEmail);
+                            attributes.put("authenticated", true);
+                            logger.info("WebSocket authenticated connection for user: {}", userEmail);
                             return true;
+                        } else {
+                            // Invalid token provided - reject
+                            logger.warn("Invalid JWT token");
+                            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+                            return false;
                         }
                     } catch (Exception e) {
-                        logger.warn("Invalid JWT token: {}", e.getMessage());
+                        logger.warn("JWT token validation error: {}", e.getMessage());
+                        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return false;
                     }
                 }
             }
             
-            // No token or invalid token - reject handshake
-            logger.warn("WebSocket authentication failed - invalid or missing token");
-            response.setStatusCode(HttpStatus.UNAUTHORIZED);
-            return false;
+            // No token provided - allow connection (for players joining games)
+            logger.debug("WebSocket unauthenticated connection allowed");
+            attributes.put("authenticated", false);
+            return true;
         }
         
         private String extractToken(String query) {

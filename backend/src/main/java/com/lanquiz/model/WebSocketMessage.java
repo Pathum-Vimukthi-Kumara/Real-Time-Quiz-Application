@@ -37,6 +37,7 @@ public class WebSocketMessage {
         SUBMIT_ANSWER,
         NEXT_QUESTION,
         END_GAME,
+        LATENCY_PING,
 
         // Server -> Client
         GAME_CREATED,
@@ -48,6 +49,7 @@ public class WebSocketMessage {
         ANSWER_RESULT,
         LEADERBOARD,
         GAME_ENDED,
+        LATENCY_PONG,
         ERROR
     }
 }

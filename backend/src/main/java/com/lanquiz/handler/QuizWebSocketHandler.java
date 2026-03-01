@@ -64,6 +64,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                 case SUBMIT_ANSWER -> handleSubmitAnswer(session, wsMessage);
                 case NEXT_QUESTION -> handleNextQuestion(session, wsMessage);
                 case END_GAME -> handleEndGame(session, wsMessage);
+                case LATENCY_PING -> handleLatencyPing(session, wsMessage);
                 default -> sendError(session, "Unknown message type");
             }
         } catch (Exception e) {
@@ -309,6 +310,20 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         broadcastToGame(pin, response);
     }
 
+    @SuppressWarnings("unchecked")
+    private void handleLatencyPing(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+        // Echo back the timestamp sent by client for latency calculation
+        Map<String, Object> payload = (Map<String, Object>) wsMessage.getPayload();
+        Long clientTimestamp = ((Number) payload.get("timestamp")).longValue();
+        
+        WebSocketMessage response = new WebSocketMessage(
+                WebSocketMessage.MessageType.LATENCY_PONG,
+                Map.of("clientTimestamp", clientTimestamp, "serverTimestamp", System.currentTimeMillis()),
+                null,
+                null);
+        sendMessage(session, response);
+    }
+
     @Override
     protected void handlePongMessage(WebSocketSession session, PongMessage message) throws Exception {
         lastPongTime.put(session.getId(), System.currentTimeMillis());
@@ -400,9 +415,12 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
-        // Set sequence number for this message
-        Long seqNum = getNextSequenceNumber(session.getId());
-        message.setSequenceNumber(seqNum);
+        // Only add sequence numbers to game-related messages, not control messages
+        if (message.getType() != WebSocketMessage.MessageType.LATENCY_PONG && 
+            message.getType() != WebSocketMessage.MessageType.ERROR) {
+            Long seqNum = getNextSequenceNumber(session.getId());
+            message.setSequenceNumber(seqNum);
+        }
         
         String json = objectMapper.writeValueAsString(message);
         session.sendMessage(new TextMessage(json));
@@ -413,6 +431,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendError(WebSocketSession session, String errorMessage) throws IOException {
+        logger.warn("Sending error to session {}: {}", session.getId(), errorMessage);
         WebSocketMessage error = new WebSocketMessage(
                 WebSocketMessage.MessageType.ERROR,
                 Map.of("message", errorMessage),

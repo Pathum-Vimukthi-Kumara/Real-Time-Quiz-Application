@@ -8,6 +8,7 @@ export type MessageType =
     | 'SUBMIT_ANSWER'
     | 'NEXT_QUESTION'
     | 'END_GAME'
+    | 'LATENCY_PING'
     | 'GAME_CREATED'
     | 'PLAYER_JOINED'
     | 'PLAYER_RECONNECTED'
@@ -17,6 +18,7 @@ export type MessageType =
     | 'ANSWER_RESULT'
     | 'LEADERBOARD'
     | 'GAME_ENDED'
+    | 'LATENCY_PONG'
     | 'ERROR';
 
 export interface WebSocketMessage {
@@ -56,6 +58,10 @@ class QuizSocket {
     private maxReconnectDelay = 30000; // Cap at 30 seconds
     private clientSequenceNumber = 0; // Sequence for outgoing messages
     private expectedServerSequence = 1; // Expected sequence from server (starts at 1)
+    private latencyMeasurements: number[] = []; // Rolling window of last 10 measurements
+    private currentLatency: number = 0; // Current measured latency in ms
+    private latencyIntervalId: NodeJS.Timeout | null = null;
+    private pendingPingTimestamp: number | null = null;
 
     connect(serverUrl: string): Promise<void> {
         // If already connected to the same URL, do nothing
@@ -88,6 +94,7 @@ class QuizSocket {
                     this.reconnectAttempts = 0;
                     this.clientSequenceNumber = 0;
                     this.expectedServerSequence = 1;
+                    this.startLatencyMeasurement();
                     resolve();
                 };
 
@@ -95,7 +102,21 @@ class QuizSocket {
                     try {
                         const message: WebSocketMessage = JSON.parse(event.data);
                         
-                        // Validate sequence number if present
+                        // Handle control messages separately (no sequence validation)
+                        if (message.type === 'LATENCY_PONG' || message.type === 'ERROR') {
+                            if (message.type === 'LATENCY_PONG') {
+                                this.handleLatencyPong(message.payload);
+                            } else {
+                                console.error('Received ERROR:', message.payload);
+                                const handlers = this.messageHandlers.get(message.type);
+                                if (handlers) {
+                                    handlers.forEach(handler => handler(message.payload));
+                                }
+                            }
+                            return;
+                        }
+                        
+                        // Validate sequence number for game messages
                         if (message.sequenceNumber !== undefined) {
                             if (message.sequenceNumber < this.expectedServerSequence) {
                                 console.warn(`Duplicate message detected. Expected seq ${this.expectedServerSequence}, got ${message.sequenceNumber}`);
@@ -117,16 +138,17 @@ class QuizSocket {
                     }
                 };
 
-                this.ws.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                    // Don't reject here immediately, let onclose handle it or reject if it's the initial connection
-                    if (this.reconnectAttempts === 0 && this.ws?.readyState !== WebSocket.OPEN) {
-                        reject(error);
-                    }
+                this.ws.onerror = () => {
+                    // Suppress error logging - WebSocket error events don't contain useful info
+                    // and are often triggered by React Strict Mode cleanup in development.
+                    // Actual connection failures are handled by onclose and reconnection logic.
                 };
 
-                this.ws.onclose = () => {
-                    console.log('WebSocket disconnected');
+                this.ws.onclose = (event) => {
+                    // Only log meaningful disconnections (not React Strict Mode cleanup)
+                    if (!this.isExplicitlyDisconnected && event.code !== 1000 && this.reconnectAttempts === 0) {
+                        console.log('WebSocket disconnected with code:', event.code);
+                    }
                     if (!this.isExplicitlyDisconnected) {
                         this.attemptReconnect();
                     }
@@ -199,13 +221,25 @@ class QuizSocket {
             this.reconnectTimeoutId = null;
         }
         
+        // Stop latency measurement
+        this.stopLatencyMeasurement();
+        
         if (this.ws) {
             // Remove listeners to prevent further callbacks
             this.ws.onopen = null;
             this.ws.onmessage = null;
             this.ws.onerror = null;
             this.ws.onclose = null;
-            this.ws.close();
+            
+            // Only close if not already closed or closing
+            // Suppress warning when closing a CONNECTING socket (happens in React Strict Mode)
+            if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+                try {
+                    this.ws.close();
+                } catch (e) {
+                    // Ignore errors during disconnect (common in React Strict Mode)
+                }
+            }
             this.ws = null;
         }
     }
@@ -235,6 +269,65 @@ class QuizSocket {
         if (typeof window !== 'undefined') {
             localStorage.removeItem('gameReconnectionData');
         }
+    }
+
+    private startLatencyMeasurement() {
+        // Stop any existing measurement
+        this.stopLatencyMeasurement();
+        
+        // Send first ping immediately
+        this.sendLatencyPing();
+        
+        // Then send ping every 3 seconds
+        this.latencyIntervalId = setInterval(() => {
+            this.sendLatencyPing();
+        }, 3000);
+    }
+
+    private stopLatencyMeasurement() {
+        if (this.latencyIntervalId) {
+            clearInterval(this.latencyIntervalId);
+            this.latencyIntervalId = null;
+        }
+        this.pendingPingTimestamp = null;
+    }
+
+    private sendLatencyPing() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            const timestamp = Date.now();
+            this.pendingPingTimestamp = timestamp;
+            
+            // Send without incrementing client sequence number (utility message)
+            const message: WebSocketMessage = {
+                type: 'LATENCY_PING',
+                payload: { timestamp }
+            };
+            this.ws.send(JSON.stringify(message));
+        }
+    }
+
+    private handleLatencyPong(payload: unknown) {
+        if (!this.pendingPingTimestamp) return;
+        
+        const now = Date.now();
+        const latency = now - this.pendingPingTimestamp;
+        
+        // Add to rolling window (keep last 10 measurements)
+        this.latencyMeasurements.push(latency);
+        if (this.latencyMeasurements.length > 10) {
+            this.latencyMeasurements.shift();
+        }
+        
+        // Calculate average latency
+        const sum = this.latencyMeasurements.reduce((a, b) => a + b, 0);
+        this.currentLatency = Math.round(sum / this.latencyMeasurements.length);
+        
+        this.pendingPingTimestamp = null;
+        console.debug(`Latency: ${latency}ms (avg: ${this.currentLatency}ms)`);
+    }
+
+    getLatency(): number {
+        return this.currentLatency;
     }
 
     isConnected(): boolean {
