@@ -32,6 +32,7 @@ public class GameService {
         session.setState(GameSession.GameState.WAITING);
         session.setCurrentQuestionIndex(-1);
         session.setHostId(hostId);
+        session.setCreatedAt(System.currentTimeMillis());
 
         activeSessions.put(session.getPin(), session);
         gameSessionRepository.save(session);
@@ -177,6 +178,29 @@ public class GameService {
         return players;
     }
 
+    public GameSession endGame(String pin) {
+        GameSession session = activeSessions.get(pin);
+        if (session == null) {
+            throw new RuntimeException("Game not found");
+        }
+
+        // Mark game as finished
+        session.setState(GameSession.GameState.FINISHED);
+        session.setCompletedAt(System.currentTimeMillis());
+        
+        // Save final leaderboard
+        List<Player> finalLeaderboard = getLeaderboard(pin);
+        session.setFinalLeaderboard(finalLeaderboard);
+        
+        // Persist to database
+        gameSessionRepository.save(session);
+        
+        // Remove from active sessions
+        activeSessions.remove(pin);
+        
+        return session;
+    }
+
     public void removePlayer(String pin, String playerId) {
         GameSession session = activeSessions.get(pin);
         if (session != null) {
@@ -240,6 +264,10 @@ public class GameService {
     
     public void deleteQuiz(String quizId) {
         quizRepository.deleteById(quizId);
+    }
+
+    public List<GameSession> getCompletedGamesByHost(String hostId) {
+        return gameSessionRepository.findByHostIdAndStateOrderByCompletedAtDesc(hostId, GameSession.GameState.FINISHED);
     }
 
     private String generatePin() {

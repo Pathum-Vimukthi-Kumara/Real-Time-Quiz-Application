@@ -304,9 +304,15 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         if (pin == null)
             return;
 
+        // Get final leaderboard before ending game
+        List<Player> leaderboard = gameService.getLeaderboard(pin);
+        
+        // Persist game to database
+        gameService.endGame(pin);
+        
         WebSocketMessage response = new WebSocketMessage(
                 WebSocketMessage.MessageType.GAME_ENDED,
-                Map.of("leaderboard", gameService.getLeaderboard(pin)),
+                Map.of("leaderboard", leaderboard),
                 null,
                 null);
         broadcastToGame(pin, response);
