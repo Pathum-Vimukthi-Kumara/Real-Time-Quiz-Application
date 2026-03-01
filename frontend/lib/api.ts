@@ -51,6 +51,31 @@ export async function fetchQuizzes(): Promise<Quiz[]> {
     }
 }
 
+export async function fetchMyQuizzes(): Promise<Quiz[]> {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        throw new Error('Not authenticated. Please login first.');
+    }
+    
+    const res = await fetch(`${API_BASE_URL}/api/quizzes/my`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        const msg = `Failed to fetch your quizzes: ${res.status} ${res.statusText}${text ? ' - ' + text : ''}`;
+        throw new Error(msg);
+    }
+    
+    try {
+        return await res.json();
+    } catch (err) {
+        throw new Error('Failed to parse quizzes JSON: ' + String(err));
+    }
+}
+
 export async function fetchQuiz(id: string): Promise<Quiz> {
     const response = await fetch(`${API_BASE_URL}/api/quizzes/${id}`);
     if (!response.ok) {
@@ -60,10 +85,16 @@ export async function fetchQuiz(id: string): Promise<Quiz> {
 }
 
 export async function createQuiz(quiz: Quiz): Promise<Quiz> {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        throw new Error('Not authenticated. Please login first.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/quizzes`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(quiz),
     });
