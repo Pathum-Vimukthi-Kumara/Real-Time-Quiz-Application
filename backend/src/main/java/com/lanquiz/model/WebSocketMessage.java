@@ -50,6 +50,7 @@ public class WebSocketMessage {
         LEADERBOARD,
         GAME_ENDED,
         LATENCY_PONG,
-        ERROR
+        ERROR,
+        SERVER_SHUTDOWN
     }
 }

@@ -38,6 +38,8 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Long> lastPongTime = new ConcurrentHashMap<>();
     // Tracks sequence numbers for outgoing messages per session
     private final Map<String, Long> sequenceNumbers = new ConcurrentHashMap<>();
+    // Flag to track if server is shutting down
+    private volatile boolean isShuttingDown = false;
 
     public QuizWebSocketHandler(GameService gameService) {
         this.gameService = gameService;
@@ -438,5 +440,49 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                 null,
                 null);
         sendMessage(session, error);
+    }
+
+    /**
+     * Gracefully shutdown - notify all connected clients before server stops
+     */
+    public void shutdown() {
+        if (isShuttingDown) {
+            return; // Already shutting down
+        }
+        
+        isShuttingDown = true;
+        logger.info("Initiating graceful shutdown - notifying {} active sessions", 
+                    gameSessions.values().stream().mapToInt(Set::size).sum());
+        
+        WebSocketMessage shutdownMessage = new WebSocketMessage(
+                WebSocketMessage.MessageType.SERVER_SHUTDOWN,
+                Map.of("message", "Server is shutting down for maintenance. Please reconnect in a few minutes."),
+                null,
+                null);
+        
+        // Broadcast to all active game sessions
+        for (Map.Entry<String, Set<WebSocketSession>> entry : gameSessions.entrySet()) {
+            for (WebSocketSession session : entry.getValue()) {
+                if (session.isOpen()) {
+                    try {
+                        sendMessage(session, shutdownMessage);
+                        // Give client time to receive the message before closing
+                        Thread.sleep(100);
+                        session.close(CloseStatus.GOING_AWAY);
+                    } catch (IOException | InterruptedException e) {
+                        logger.error("Error during graceful shutdown for session {}", session.getId(), e);
+                    }
+                }
+            }
+        }
+        
+        // Cleanup all tracking maps
+        gameSessions.clear();
+        sessionToGame.clear();
+        sessionToPlayer.clear();
+        lastPongTime.clear();
+        sequenceNumbers.clear();
+        
+        logger.info("Graceful shutdown complete");
     }
 }

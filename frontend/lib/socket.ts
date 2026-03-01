@@ -19,7 +19,8 @@ export type MessageType =
     | 'LEADERBOARD'
     | 'GAME_ENDED'
     | 'LATENCY_PONG'
-    | 'ERROR';
+    | 'ERROR'
+    | 'SERVER_SHUTDOWN';
 
 export interface WebSocketMessage {
     type: MessageType;
@@ -53,6 +54,7 @@ class QuizSocket {
     private maxReconnectAttempts = 10;
     private serverUrl: string = '';
     private isExplicitlyDisconnected = false;
+    private isServerShuttingDown = false; // Track if server is shutting down
     private reconnectTimeoutId: NodeJS.Timeout | null = null;
     private baseReconnectDelay = 1000; // Start with 1 second
     private maxReconnectDelay = 30000; // Cap at 30 seconds
@@ -102,6 +104,18 @@ class QuizSocket {
                     try {
                         const message: WebSocketMessage = JSON.parse(event.data);
                         
+                        // Handle SERVER_SHUTDOWN immediately - stop all reconnection attempts
+                        if (message.type === 'SERVER_SHUTDOWN') {
+                            this.isServerShuttingDown = true;
+                            this.stopLatencyMeasurement();
+                            console.warn('Server is shutting down:', message.payload);
+                            const handlers = this.messageHandlers.get(message.type);
+                            if (handlers) {
+                                handlers.forEach(handler => handler(message.payload));
+                            }
+                            return;
+                        }
+                        
                         // Handle control messages separately (no sequence validation)
                         if (message.type === 'LATENCY_PONG' || message.type === 'ERROR') {
                             if (message.type === 'LATENCY_PONG') {
@@ -149,7 +163,9 @@ class QuizSocket {
                     if (!this.isExplicitlyDisconnected && event.code !== 1000 && this.reconnectAttempts === 0) {
                         console.log('WebSocket disconnected with code:', event.code);
                     }
-                    if (!this.isExplicitlyDisconnected) {
+                    
+                    // Don't attempt reconnection if server is shutting down or explicitly disconnected
+                    if (!this.isExplicitlyDisconnected && !this.isServerShuttingDown) {
                         this.attemptReconnect();
                     }
                 };
@@ -160,6 +176,12 @@ class QuizSocket {
     }
 
     private attemptReconnect() {
+        // Don't reconnect if server is shutting down
+        if (this.isServerShuttingDown) {
+            console.log('Server is shutting down - reconnection disabled');
+            return;
+        }
+        
         if (this.reconnectAttempts < this.maxReconnectAttempts && this.serverUrl && !this.isExplicitlyDisconnected) {
             this.reconnectAttempts++;
             
@@ -214,6 +236,7 @@ class QuizSocket {
 
     disconnect() {
         this.isExplicitlyDisconnected = true;
+        this.isServerShuttingDown = false; // Reset shutdown flag on manual disconnect
         
         // Clear any pending reconnection timeout
         if (this.reconnectTimeoutId) {

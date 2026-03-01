@@ -3,11 +3,13 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { useToast } from '@/contexts/ToastContext';
 
 function HostGameContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const quizId = searchParams.get('quizId');
+    const { addToast } = useToast();
 
     const [gamePin, setGamePin] = useState<string>('');
     const [players, setPlayers] = useState<Player[]>([]);
@@ -34,6 +36,12 @@ function HostGameContent() {
         quizSocket.on('GAME_STARTED', (p) => { setCurrentQuestion(p as Question); setTimeLeft((p as Question).timeLimit); setGameState('playing'); });
         quizSocket.on('QUESTION', (p) => { setCurrentQuestion(p as Question); setTimeLeft((p as Question).timeLimit); setGameState('playing'); });
         quizSocket.on('GAME_ENDED', (p) => { setLeaderboard((p as { leaderboard: Player[] }).leaderboard); setGameState('ended'); });
+        
+        quizSocket.on('SERVER_SHUTDOWN', (p) => {
+            const data = p as { message: string };
+            addToast(data.message || 'Server is shutting down. Returning to home page.', 'warning');
+            setTimeout(() => router.push('/host'), 2000);
+        });
 
         return () => { quizSocket.disconnect(); };
     }, [quizId, router]);
