@@ -63,6 +63,13 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
 
     @SuppressWarnings("unchecked")
     private void handleCreateGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+        // Verify host is authenticated
+        String userEmail = (String) session.getAttributes().get("userEmail");
+        if (userEmail == null) {
+            sendError(session, "Authentication required");
+            return;
+        }
+        
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String quizId = payload.get("quizId");
         String hostId = session.getId();

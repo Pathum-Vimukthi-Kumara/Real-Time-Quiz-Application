@@ -63,7 +63,11 @@ class QuizSocket {
 
         return new Promise((resolve, reject) => {
             try {
-                this.ws = new WebSocket(serverUrl);
+                // Append JWT token from localStorage to WebSocket URL
+                const token = localStorage.getItem('authToken');
+                const wsUrl = token ? `${serverUrl}?token=${token}` : serverUrl;
+                
+                this.ws = new WebSocket(wsUrl);
 
                 this.ws.onopen = () => {
                     console.log('WebSocket connected');
