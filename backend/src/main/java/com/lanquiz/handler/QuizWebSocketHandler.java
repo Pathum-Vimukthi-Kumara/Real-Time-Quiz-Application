@@ -239,18 +239,24 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         Map<String, Object> payload = (Map<String, Object>) wsMessage.getPayload();
         int answerIndex = (Integer) payload.get("answerIndex");
 
-        boolean correct = gameService.submitAnswer(pin, playerId, answerIndex);
-        Quiz.Question question = gameService.getCurrentQuestion(pin);
+        try {
+            boolean correct = gameService.submitAnswer(pin, playerId, answerIndex);
+            Quiz.Question question = gameService.getCurrentQuestion(pin);
 
-        WebSocketMessage response = new WebSocketMessage(
-                WebSocketMessage.MessageType.ANSWER_RESULT,
-                Map.of(
-                        "correct", correct,
-                        "correctAnswer", question.getCorrectOptionIndex(),
-                        "leaderboard", gameService.getLeaderboard(pin)),
-                null,
-                playerId);
-        sendMessage(session, response);
+            WebSocketMessage response = new WebSocketMessage(
+                    WebSocketMessage.MessageType.ANSWER_RESULT,
+                    Map.of(
+                            "correct", correct,
+                            "correctAnswer", question.getCorrectOptionIndex(),
+                            "leaderboard", gameService.getLeaderboard(pin)),
+                    null,
+                    playerId);
+            sendMessage(session, response);
+        } catch (RuntimeException e) {
+            // Handle rate limiting and other submission errors
+            logger.warn("Answer submission failed for player {}: {}", playerId, e.getMessage());
+            sendError(session, e.getMessage());
+        }
     }
 
     private void handleNextQuestion(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {

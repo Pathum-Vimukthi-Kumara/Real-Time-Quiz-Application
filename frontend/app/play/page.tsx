@@ -3,12 +3,14 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { useToast } from '@/contexts/ToastContext';
 
 function PlayGameContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const pin = searchParams.get('pin');
     const username = searchParams.get('username');
+    const { addToast } = useToast();
 
     const [gameState, setGameState] = useState<'connecting' | 'lobby' | 'playing' | 'result' | 'ended'>('connecting');
     const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -18,6 +20,7 @@ function PlayGameContent() {
     const [leaderboard, setLeaderboard] = useState<Player[]>([]);
     const [myScore, setMyScore] = useState(0);
     const [playerId, setPlayerId] = useState<string | null>(null);
+    const [lastSubmissionTime, setLastSubmissionTime] = useState(0);
 
     useEffect(() => {
         if (!pin || !username) { router.push('/'); return; }
@@ -79,6 +82,7 @@ function PlayGameContent() {
             setTimeLeft(q.timeLimit);
             setSelectedAnswer(null);
             setAnswerResult(null);
+            setLastSubmissionTime(0);
             setGameState('playing');
         });
 
@@ -88,6 +92,7 @@ function PlayGameContent() {
             setTimeLeft(q.timeLimit);
             setSelectedAnswer(null);
             setAnswerResult(null);
+            setLastSubmissionTime(0);
             setGameState('playing');
         });
 
@@ -107,6 +112,11 @@ function PlayGameContent() {
             quizSocket.clearReconnectionData();
         });
 
+        quizSocket.on('ERROR', (p) => {
+            const error = p as { message: string };
+            addToast(error.message, 'error', 3000);
+        });
+
         return () => { 
             quizSocket.disconnect();
             // Don't clear reconnection data on unmount - only on game end or explicit exit
@@ -122,6 +132,16 @@ function PlayGameContent() {
 
     const submitAnswer = (index: number) => {
         if (selectedAnswer !== null) return;
+        
+        // Client-side rate limiting: minimum 300ms between submissions
+        const currentTime = Date.now();
+        const timeSinceLastSubmission = currentTime - lastSubmissionTime;
+        if (lastSubmissionTime > 0 && timeSinceLastSubmission < 300) {
+            addToast('Please wait before submitting', 'warning', 2000);
+            return;
+        }
+        
+        setLastSubmissionTime(currentTime);
         setSelectedAnswer(index);
         quizSocket.send('SUBMIT_ANSWER', { answerIndex: index });
     };

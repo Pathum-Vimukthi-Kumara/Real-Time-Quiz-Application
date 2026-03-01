@@ -99,19 +99,36 @@ public class GameService {
         Quiz quiz = quizRepository.findById(session.getQuizId())
                 .orElseThrow(() -> new RuntimeException("Quiz not found"));
 
-        Quiz.Question question = quiz.getQuestions().get(session.getCurrentQuestionIndex());
+        int currentQuestionIndex = session.getCurrentQuestionIndex();
+        Quiz.Question question = quiz.getQuestions().get(currentQuestionIndex);
         Player player = session.getPlayers().get(playerId);
 
         if (player == null)
             return false;
 
+        // Rate limiting: Check if player already answered this question
+        if (player.getLastAnsweredQuestionIndex() == currentQuestionIndex) {
+            throw new RuntimeException("You have already answered this question");
+        }
+
+        // Rate limiting: Prevent rapid submissions (minimum 300ms between attempts)
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastAttempt = currentTime - player.getLastSubmissionAttemptTime();
+        if (player.getLastSubmissionAttemptTime() > 0 && timeSinceLastAttempt < 300) {
+            throw new RuntimeException("Please wait before submitting again");
+        }
+
+        // Update rate limit tracking
+        player.setLastSubmissionAttemptTime(currentTime);
+        player.setLastAnsweredQuestionIndex(currentQuestionIndex);
+        
         player.incrementTotalAnswers();
-        player.setLastAnswerTime(System.currentTimeMillis());
+        player.setLastAnswerTime(currentTime);
 
         boolean correct = answerIndex == question.getCorrectOptionIndex();
         if (correct) {
             // Calculate score based on time taken
-            long timeTaken = System.currentTimeMillis() - session.getQuestionStartTime();
+            long timeTaken = currentTime - session.getQuestionStartTime();
             int timeBonus = Math.max(0, (int) ((quiz.getTimePerQuestion() * 1000 - timeTaken) / 100));
             int points = question.getPoints() + timeBonus;
 

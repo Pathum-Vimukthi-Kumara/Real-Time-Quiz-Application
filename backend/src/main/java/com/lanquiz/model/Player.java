@@ -10,6 +10,8 @@ public class Player {
     private AtomicInteger totalAnswers;
     private long lastAnswerTime;
     private String reconnectionToken;
+    private int lastAnsweredQuestionIndex = -1;
+    private long lastSubmissionAttemptTime = 0L;
 
     public Player() {
         this.score = new AtomicInteger(0);
@@ -93,5 +95,21 @@ public class Player {
 
     public void setReconnectionToken(String reconnectionToken) {
         this.reconnectionToken = reconnectionToken;
+    }
+
+    public int getLastAnsweredQuestionIndex() {
+        return lastAnsweredQuestionIndex;
+    }
+
+    public void setLastAnsweredQuestionIndex(int lastAnsweredQuestionIndex) {
+        this.lastAnsweredQuestionIndex = lastAnsweredQuestionIndex;
+    }
+
+    public long getLastSubmissionAttemptTime() {
+        return lastSubmissionAttemptTime;
+    }
+
+    public void setLastSubmissionAttemptTime(long lastSubmissionAttemptTime) {
+        this.lastSubmissionAttemptTime = lastSubmissionAttemptTime;
     }
 }
