@@ -3,6 +3,8 @@ package com.lanquiz.service;
 import com.lanquiz.model.*;
 import com.lanquiz.repository.GameSessionRepository;
 import com.lanquiz.repository.QuizRepository;
+import jakarta.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,6 +20,24 @@ public class GameService {
     public GameService(QuizRepository quizRepository, GameSessionRepository gameSessionRepository) {
         this.quizRepository = quizRepository;
         this.gameSessionRepository = gameSessionRepository;
+    }
+
+    // Restore in-progress games from DB on server startup
+    @PostConstruct
+    public void loadActiveGames() {
+        List<GameSession> inProgressGames = gameSessionRepository.findByStateNot(GameSession.GameState.FINISHED);
+        for (GameSession session : inProgressGames) {
+            activeSessions.put(session.getPin(), session);
+        }
+        if (!inProgressGames.isEmpty()) {
+            System.out.println("Restored " + inProgressGames.size() + " active game session(s) from database.");
+        }
+    }
+
+    // Persist game session to DB asynchronously (non-blocking)
+    @Async
+    public void saveSessionAsync(GameSession session) {
+        gameSessionRepository.save(session);
     }
 
     public GameSession createGame(String quizId, String hostId) {
@@ -112,10 +132,10 @@ public class GameService {
             throw new RuntimeException("You have already answered this question");
         }
 
-        // Rate limiting: Prevent rapid submissions (minimum 300ms between attempts)
+        // Rate limiting: Prevent rapid submissions (minimum 500ms between attempts)
         long currentTime = System.currentTimeMillis();
         long timeSinceLastAttempt = currentTime - player.getLastSubmissionAttemptTime();
-        if (player.getLastSubmissionAttemptTime() > 0 && timeSinceLastAttempt < 300) {
+        if (player.getLastSubmissionAttemptTime() > 0 && timeSinceLastAttempt < 500) {
             throw new RuntimeException("Please wait before submitting again");
         }
 
@@ -137,6 +157,9 @@ public class GameService {
             player.incrementCorrectAnswers();
         }
 
+        // Persist updated scores to DB without blocking the WebSocket thread
+        saveSessionAsync(session);
+
         return correct;
     }
 
@@ -157,6 +180,9 @@ public class GameService {
             session.setQuestionStartTime(System.currentTimeMillis());
             session.setState(GameSession.GameState.IN_PROGRESS);
         }
+
+        // Persist question progress to DB without blocking the WebSocket thread
+        saveSessionAsync(session);
 
         return session;
     }

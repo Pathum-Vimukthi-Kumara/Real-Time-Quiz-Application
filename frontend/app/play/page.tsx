@@ -113,6 +113,13 @@ function PlayGameContent() {
             quizSocket.clearReconnectionData();
         });
 
+        quizSocket.on('SERVER_SHUTDOWN', (p) => {
+            const data = p as { message: string };
+            addToast(data.message || 'Server is shutting down. The game has ended.', 'warning');
+            quizSocket.clearReconnectionData();
+            setTimeout(() => router.push('/'), 2000);
+        });
+
         quizSocket.on('ERROR', (p) => {
             const error = p as { message: string };
             addToast(error.message, 'error', 3000);
@@ -142,10 +149,10 @@ function PlayGameContent() {
     const submitAnswer = (index: number) => {
         if (selectedAnswer !== null) return;
         
-        // Client-side rate limiting: minimum 300ms between submissions
+        // Client-side rate limiting: minimum 500ms between submissions
         const currentTime = Date.now();
         const timeSinceLastSubmission = currentTime - lastSubmissionTime;
-        if (lastSubmissionTime > 0 && timeSinceLastSubmission < 300) {
+        if (lastSubmissionTime > 0 && timeSinceLastSubmission < 500) {
             addToast('Please wait before submitting', 'warning', 2000);
             return;
         }

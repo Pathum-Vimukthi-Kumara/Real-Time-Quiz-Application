@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface GameSessionRepository extends MongoRepository<GameSession, String> {
     Optional<GameSession> findByPin(String pin);
     List<GameSession> findByHostIdAndStateOrderByCompletedAtDesc(String hostId, GameSession.GameState state);
+    List<GameSession> findByStateNot(GameSession.GameState state);
 }
