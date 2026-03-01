@@ -7,8 +7,11 @@ import com.lanquiz.model.WebSocketMessage;
 import com.lanquiz.service.GameService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PingMessage;
+import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -30,6 +33,8 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, String> sessionToGame = new ConcurrentHashMap<>();
     // Maps WebSocket session IDs to player IDs
     private final Map<String, String> sessionToPlayer = new ConcurrentHashMap<>();
+    // Tracks last pong time for heartbeat monitoring
+    private final Map<String, Long> lastPongTime = new ConcurrentHashMap<>();
 
     public QuizWebSocketHandler(GameService gameService) {
         this.gameService = gameService;
@@ -38,6 +43,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         logger.info("WebSocket connection established: {}", session.getId());
+        lastPongTime.put(session.getId(), System.currentTimeMillis());
     }
 
     @Override
@@ -227,9 +233,56 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
+    protected void handlePongMessage(WebSocketSession session, PongMessage message) throws Exception {
+        lastPongTime.put(session.getId(), System.currentTimeMillis());
+        logger.debug("Received pong from session: {}", session.getId());
+    }
+
+    @Scheduled(fixedRate = 15000) // Run every 15 seconds
+    public void sendHeartbeat() {
+        long currentTime = System.currentTimeMillis();
+        Set<String> sessionsToRemove = new HashSet<>();
+
+        // Send ping to all active sessions and check for stale connections
+        for (Map.Entry<String, Set<WebSocketSession>> entry : gameSessions.entrySet()) {
+            Set<WebSocketSession> sessions = entry.getValue();
+            for (WebSocketSession session : sessions) {
+                if (session.isOpen()) {
+                    Long lastPong = lastPongTime.get(session.getId());
+                    
+                    // Close connection if no pong received in 30 seconds
+                    if (lastPong != null && (currentTime - lastPong) > 30000) {
+                        logger.warn("Closing stale connection: {}", session.getId());
+                        sessionsToRemove.add(session.getId());
+                        try {
+                            session.close(CloseStatus.SESSION_NOT_RELIABLE);
+                        } catch (IOException e) {
+                            logger.error("Error closing stale session", e);
+                        }
+                    } else {
+                        // Send ping
+                        try {
+                            session.sendMessage(new PingMessage());
+                            logger.debug("Sent ping to session: {}", session.getId());
+                        } catch (IOException e) {
+                            logger.error("Error sending ping to session: {}", session.getId(), e);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clean up stale session tracking data
+        for (String sessionId : sessionsToRemove) {
+            lastPongTime.remove(sessionId);
+        }
+    }
+
+    @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         String pin = sessionToGame.remove(session.getId());
         String playerId = sessionToPlayer.remove(session.getId());
+        lastPongTime.remove(session.getId());
 
         if (pin != null) {
             Set<WebSocketSession> sessions = gameSessions.get(pin);
