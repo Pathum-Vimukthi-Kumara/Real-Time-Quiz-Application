@@ -45,9 +45,12 @@ class QuizSocket {
     private ws: WebSocket | null = null;
     private messageHandlers: Map<MessageType, ((payload: unknown) => void)[]> = new Map();
     private reconnectAttempts = 0;
-    private maxReconnectAttempts = 5;
+    private maxReconnectAttempts = 10;
     private serverUrl: string = '';
     private isExplicitlyDisconnected = false;
+    private reconnectTimeoutId: NodeJS.Timeout | null = null;
+    private baseReconnectDelay = 1000; // Start with 1 second
+    private maxReconnectDelay = 30000; // Cap at 30 seconds
 
     connect(serverUrl: string): Promise<void> {
         // If already connected to the same URL, do nothing
@@ -60,6 +63,12 @@ class QuizSocket {
 
         this.serverUrl = serverUrl;
         this.isExplicitlyDisconnected = false;
+
+        // Clear any pending reconnection timeout
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+            this.reconnectTimeoutId = null;
+        }
 
         return new Promise((resolve, reject) => {
             try {
@@ -112,12 +121,22 @@ class QuizSocket {
     private attemptReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts && this.serverUrl && !this.isExplicitlyDisconnected) {
             this.reconnectAttempts++;
-            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-            setTimeout(() => {
+            
+            // Calculate delay with exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+            const delay = Math.min(
+                this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+                this.maxReconnectDelay
+            );
+            
+            console.log(`Attempting to reconnect in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            this.reconnectTimeoutId = setTimeout(() => {
                 if (!this.isExplicitlyDisconnected) {
                     this.connect(this.serverUrl).catch(() => { });
                 }
-            }, 2000);
+            }, delay);
+        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('Max reconnection attempts reached. Please refresh the page to reconnect.');
         }
     }
 
@@ -149,6 +168,13 @@ class QuizSocket {
 
     disconnect() {
         this.isExplicitlyDisconnected = true;
+        
+        // Clear any pending reconnection timeout
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+            this.reconnectTimeoutId = null;
+        }
+        
         if (this.ws) {
             // Remove listeners to prevent further callbacks
             this.ws.onopen = null;
