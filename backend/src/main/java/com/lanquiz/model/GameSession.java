@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,8 +22,12 @@ public class GameSession {
     private GameState state;
     private int currentQuestionIndex;
     private Map<String, Player> players = new ConcurrentHashMap<>();
+    private Map<String, String> reconnectionTokens = new ConcurrentHashMap<>(); // token -> playerId
     private long questionStartTime;
     private String hostId;
+    private Long createdAt; // Timestamp when game was created
+    private Long completedAt; // Timestamp when game ended
+    private List<Player> finalLeaderboard; // Final standings when game completed
 
     public Map<String, Player> getPlayers() {
         return players;

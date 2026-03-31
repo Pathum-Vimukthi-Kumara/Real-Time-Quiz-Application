@@ -3,12 +3,14 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { useToast } from '@/contexts/ToastContext';
 
 function PlayGameContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const pin = searchParams.get('pin');
     const username = searchParams.get('username');
+    const { addToast } = useToast();
 
     const [gameState, setGameState] = useState<'connecting' | 'lobby' | 'playing' | 'result' | 'ended'>('connecting');
     const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -17,6 +19,9 @@ function PlayGameContent() {
     const [timeLeft, setTimeLeft] = useState(0);
     const [leaderboard, setLeaderboard] = useState<Player[]>([]);
     const [myScore, setMyScore] = useState(0);
+    const [playerId, setPlayerId] = useState<string | null>(null);
+    const [lastSubmissionTime, setLastSubmissionTime] = useState(0);
+    const [latency, setLatency] = useState(0);
 
     useEffect(() => {
         if (!pin || !username) { router.push('/'); return; }
@@ -24,9 +29,53 @@ function PlayGameContent() {
         const serverUrl = getWebSocketUrl();
 
         quizSocket.connect(serverUrl).then(() => {
-            quizSocket.send('JOIN_GAME', { pin, username });
+            // Check if we have reconnection data
+            const reconnectionData = quizSocket.getReconnectionData();
+            
+            if (reconnectionData && reconnectionData.pin === pin) {
+                // Attempt to reconnect
+                console.log('Attempting to reconnect with token');
+                quizSocket.send('RECONNECT_GAME', { 
+                    pin: reconnectionData.pin, 
+                    reconnectionToken: reconnectionData.reconnectionToken 
+                });
+            } else {
+                // Fresh join
+                quizSocket.send('JOIN_GAME', { pin, username });
+            }
             setGameState('lobby');
         }).catch(() => router.push('/'));
+
+        quizSocket.on('PLAYER_JOINED', (p) => {
+            const data = p as { playerId: string; username: string; reconnectionToken: string };
+            if (data.username === username) {
+                // Save reconnection data for this player
+                setPlayerId(data.playerId);
+                quizSocket.saveReconnectionData(pin, data.reconnectionToken, data.playerId, username);
+                console.log('Saved reconnection token');
+            }
+        });
+
+        quizSocket.on('PLAYER_RECONNECTED', (p) => {
+            const data = p as any;
+            if (data.username === username) {
+                console.log('Successfully reconnected!');
+                setPlayerId(data.playerId);
+                
+                // Restore game state if in progress
+                if (data.gameState === 'IN_PROGRESS' && data.questionText) {
+                    setCurrentQuestion({
+                        questionIndex: data.currentQuestionIndex,
+                        questionText: data.questionText,
+                        options: data.options,
+                        points: data.points,
+                        timeLimit: data.timeLimit,
+                        totalQuestions: data.totalQuestions
+                    });
+                    setGameState('playing');
+                }
+            }
+        });
 
         quizSocket.on('GAME_STARTED', (p) => {
             const q = p as Question;
@@ -34,6 +83,7 @@ function PlayGameContent() {
             setTimeLeft(q.timeLimit);
             setSelectedAnswer(null);
             setAnswerResult(null);
+            setLastSubmissionTime(0);
             setGameState('playing');
         });
 
@@ -43,6 +93,7 @@ function PlayGameContent() {
             setTimeLeft(q.timeLimit);
             setSelectedAnswer(null);
             setAnswerResult(null);
+            setLastSubmissionTime(0);
             setGameState('playing');
         });
 
@@ -58,9 +109,26 @@ function PlayGameContent() {
         quizSocket.on('GAME_ENDED', (p) => {
             setLeaderboard((p as { leaderboard: Player[] }).leaderboard);
             setGameState('ended');
+            // Clear reconnection data when game ends
+            quizSocket.clearReconnectionData();
         });
 
-        return () => { quizSocket.disconnect(); };
+        quizSocket.on('SERVER_SHUTDOWN', (p) => {
+            const data = p as { message: string };
+            addToast(data.message || 'Server is shutting down. The game has ended.', 'warning');
+            quizSocket.clearReconnectionData();
+            setTimeout(() => router.push('/'), 2000);
+        });
+
+        quizSocket.on('ERROR', (p) => {
+            const error = p as { message: string };
+            addToast(error.message, 'error', 3000);
+        });
+
+        return () => { 
+            quizSocket.disconnect();
+            // Don't clear reconnection data on unmount - only on game end or explicit exit
+        };
     }, [pin, username, router]);
 
     useEffect(() => {
@@ -70,8 +138,26 @@ function PlayGameContent() {
         }
     }, [gameState, timeLeft]);
 
+    useEffect(() => {
+        // Update latency display every second
+        const interval = setInterval(() => {
+            setLatency(quizSocket.getLatency());
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     const submitAnswer = (index: number) => {
         if (selectedAnswer !== null) return;
+        
+        // Client-side rate limiting: minimum 500ms between submissions
+        const currentTime = Date.now();
+        const timeSinceLastSubmission = currentTime - lastSubmissionTime;
+        if (lastSubmissionTime > 0 && timeSinceLastSubmission < 500) {
+            addToast('Please wait before submitting', 'warning', 2000);
+            return;
+        }
+        
+        setLastSubmissionTime(currentTime);
         setSelectedAnswer(index);
         quizSocket.send('SUBMIT_ANSWER', { answerIndex: index });
     };
@@ -84,6 +170,26 @@ function PlayGameContent() {
 
     return (
         <main className="min-h-screen p-4 flex flex-col">
+            {/* Latency indicator */}
+            {latency > 0 && (
+                <div className="fixed top-4 right-4 z-50 pointer-events-none">
+                    <div className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
+                        latency < 50 ? 'bg-green-500/20 text-green-400' :
+                        latency < 100 ? 'bg-yellow-500/20 text-yellow-400' :
+                        latency < 200 ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-red-500/20 text-red-400'
+                    }`}>
+                        <span className="inline-block w-2 h-2 rounded-full mr-1.5 animate-pulse ${
+                            latency < 50 ? 'bg-green-400' :
+                            latency < 100 ? 'bg-yellow-400' :
+                            latency < 200 ? 'bg-orange-400' :
+                            'bg-red-400'
+                        }" />
+                        {latency}ms
+                    </div>
+                </div>
+            )}
+
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/20 rounded-full blur-[100px]" />
                 <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]" />

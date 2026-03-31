@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { fetchQuizzes, fetchQuiz, createQuiz, Quiz } from '@/lib/api';
+import { fetchQuizzes, fetchMyQuizzes, fetchQuiz, createQuiz, Quiz } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
 export function useQuizApi() {
@@ -15,6 +15,22 @@ export function useQuizApi() {
       return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch quizzes';
+      setError(message);
+      addToast(message, 'error');
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  const getMyQuizzes = useCallback(async (): Promise<Quiz[]> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchMyQuizzes();
+      return data;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch your quizzes';
       setError(message);
       addToast(message, 'error');
       return [];
@@ -66,6 +82,7 @@ export function useQuizApi() {
     loading,
     error,
     getQuizzes,
+    getMyQuizzes,
     getQuiz,
     createNewQuiz,
   };

@@ -62,7 +62,9 @@ export default function HostPage() {
     const router = useRouter();
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
-    const { loading, error, getQuizzes, createNewQuiz } = useQuizApi();
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [userName, setUserName] = useState<string>('');
+    const { loading, error, getMyQuizzes, createNewQuiz } = useQuizApi();
 
     // Quiz Creation State
     const [newQuiz, setNewQuiz] = useState<Quiz>({
@@ -80,11 +82,31 @@ export default function HostPage() {
     });
 
     const loadQuizzes = useCallback(async () => {
-        const data = await getQuizzes();
+        const data = await getMyQuizzes();
         setQuizzes(data);
-    }, [getQuizzes]);
+    }, [getMyQuizzes]);
+
+    const handleLogout = useCallback(() => {
+        setShowLogoutConfirm(true);
+    }, []);
+
+    const confirmLogout = useCallback(() => {
+        // Clear all authentication data from localStorage
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userName');
+        
+        // Redirect to login page
+        router.push('/login');
+    }, [router]);
 
     useEffect(() => {
+        // Get user name from localStorage
+        const storedUserName = localStorage.getItem('userName');
+        if (storedUserName) {
+            setUserName(storedUserName);
+        }
+        
         loadQuizzes();
     }, [loadQuizzes]);
 
@@ -153,9 +175,10 @@ export default function HostPage() {
 
             <div className="max-w-7xl mx-auto relative z-10">
                 {/* Header Section */}
-                <header className="flex flex-col md:flex-row items-start md:items-end justify-between mb-12 gap-6 animate-fadeIn">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-4 text-sm font-medium text-gray-400">
+                <header className="mb-12 animate-fadeIn">
+                    {/* Top Bar - Breadcrumb and Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3 text-sm font-medium text-gray-400">
                             <button
                                 onClick={() => router.push('/')}
                                 className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition border border-white/10 hover:text-white"
@@ -168,22 +191,51 @@ export default function HostPage() {
                             <span>/</span>
                             <span className="text-emerald-300 tracking-wide uppercase text-xs font-bold">Host Dashboard</span>
                         </div>
+
+                        <div className="flex items-center gap-3">
+                            {/* User Info */}
+                            {userName && (
+                                <div className="hidden md:flex items-center gap-3 px-4 py-2 rounded-lg bg-white/5 border border-white/10">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center text-sm font-bold text-slate-900">
+                                        {userName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-300">{userName}</span>
+                                </div>
+                            )}
+                            
+                            <button
+                                onClick={() => setShowCreateForm(true)}
+                                className="btn btn-primary shadow-lg whitespace-nowrap px-4 py-2 text-sm"
+                                aria-label="Create new quiz"
+                            >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Create New Quiz
+                            </button>
+                            
+                            {/* Logout Button */}
+                            <button
+                                onClick={handleLogout}
+                                className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 hover:border-red-500/50 whitespace-nowrap px-4 py-2 text-sm"
+                                aria-label="Logout"
+                                title="Logout"
+                            >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Title Section */}
+                    <div>
                         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
                             Manage Your <span className="text-gradient">Quizzes</span>
                         </h1>
                         <p className="text-gray-400 mt-2 text-lg max-w-xl font-light">Create, edit, and host real-time quizzes for your local network.</p>
                     </div>
-
-                    <button
-                        onClick={() => setShowCreateForm(true)}
-                        className="btn btn-primary shadow-lg whitespace-nowrap px-6 py-3 text-sm"
-                        aria-label="Create new quiz"
-                    >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Create New Quiz
-                    </button>
                 </header>
 
                 {/* Content Area */}
@@ -221,6 +273,38 @@ export default function HostPage() {
                                 colorClass={avatarColors[index % avatarColors.length]}
                             />
                         ))}
+                    </div>
+                )}
+
+                {/* Logout Confirmation Modal */}
+                {showLogoutConfirm && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+                        <div className="glass-card w-full max-w-md shadow-2xl overflow-hidden border-2 border-red-400/20">
+                            <div className="p-6">
+                                <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 border-2 border-red-500/30">
+                                    <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-xl font-bold text-center mb-2">Confirm Logout</h3>
+                                <p className="text-gray-400 text-center mb-6">Are you sure you want to logout? You&apos;ll need to login again to access your quizzes.</p>
+                                
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowLogoutConfirm(false)}
+                                        className="flex-1 btn bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border-white/10 py-3"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmLogout}
+                                        className="flex-1 btn bg-red-500 hover:bg-red-600 text-white border-red-600 py-3 font-semibold"
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
