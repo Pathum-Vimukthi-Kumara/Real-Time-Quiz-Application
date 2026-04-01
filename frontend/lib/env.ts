@@ -1,7 +1,6 @@
 export function validateEnv() {
   const requiredEnvVars = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
   };
 
   const missing: string[] = [];
@@ -34,16 +33,7 @@ export function getApiUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
 }
 
+/** @deprecated Realtime uses `/api/quiz-realtime` (TCP bridge). */
 export function getWebSocketUrl(): string {
-  if (process.env.NEXT_PUBLIC_WS_URL) {
-    return process.env.NEXT_PUBLIC_WS_URL;
-  }
-
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:8081/ws/quiz`;
-  }
-
-  return 'ws://localhost:8081/ws/quiz';
+  return '';
 }

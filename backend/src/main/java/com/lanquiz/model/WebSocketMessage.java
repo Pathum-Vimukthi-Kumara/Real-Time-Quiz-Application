@@ -30,6 +30,7 @@ public class WebSocketMessage {
 
     public enum MessageType {
         // Client -> Server
+        AUTH,
         CREATE_GAME,
         JOIN_GAME,
         RECONNECT_GAME,

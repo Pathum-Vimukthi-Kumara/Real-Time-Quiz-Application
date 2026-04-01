@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { quizSocket, MessageType, getWebSocketUrl } from '@/lib/socket';
+import { quizSocket, MessageType } from '@/lib/socket';
 import { useToast } from '@/contexts/ToastContext';
 
 export function useQuizSocket() {
@@ -8,23 +8,24 @@ export function useQuizSocket() {
   const { addToast } = useToast();
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectUrlRef = useRef<string | undefined>();
+  const autoReconnectRef = useRef(false);
 
   const connect = useCallback(
     async (url?: string) => {
       if (connected || connecting) return;
 
+      autoReconnectRef.current = true;
       reconnectUrlRef.current = url;
       setConnecting(true);
       try {
-        const serverUrl = url || getWebSocketUrl();
-        await quizSocket.connect(serverUrl);
+        await quizSocket.connect(url);
         setConnected(true);
         setConnecting(false);
       } catch (err) {
         setConnecting(false);
         setConnected(false);
         addToast('Failed to connect to game server', 'error');
-        console.error('WebSocket connection error:', err);
+        console.error('Quiz realtime connection error:', err);
       }
     },
     [connected, connecting, addToast]
@@ -32,7 +33,7 @@ export function useQuizSocket() {
 
   // Separate reconnection effect
   useEffect(() => {
-    if (!connected && !connecting && reconnectUrlRef.current) {
+    if (!connected && !connecting && autoReconnectRef.current) {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
@@ -48,6 +49,7 @@ export function useQuizSocket() {
   }, [connected, connecting, connect]);
 
   const disconnect = useCallback(() => {
+    autoReconnectRef.current = false;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
