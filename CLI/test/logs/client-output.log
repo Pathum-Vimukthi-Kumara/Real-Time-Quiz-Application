@@ -1,0 +1,24 @@
+		 LAN Quiz Client
+		===============
+
+Enter host IP (example 192.168.1.10): Enter host port (default 8888): Connected to quiz host.
+
+You joined the LAN quiz host.
+Enter your name: Welcome Tester1
+[Info] Tester1 joined. Total players: 1
+
+Quiz is starting now. Good luck!
+
+Question 1/1 (10s)
+2 + 2 = ?
+A) 4
+B) 3
+C) 2
+D) 1
+Your answer (A/B/C/D): Q1|Correct|0.013s
+
+Quiz ended. Final ranking:
+1. Tester1 | score=119 | correct=1 | time=0.01s
+Server disconnected.
+
+

@@ -1,0 +1,24 @@
+		 LAN Quiz Host Server
+		====================
+
+Enter port (default 8888): Host LAN IPv4 addresses:
+- 172.24.192.1:9123 (Hyper-V Virtual Ethernet Adapter)
+- 10.64.7.250:9123 (Intel(R) Wi-Fi 6 AX201 160MHz #2)
+
+Number of MCQ questions: 
+Create Question 1:
+Question text: Option A: Option B: Option C: Option D: Correct option (A/B/C/D): Time limit in seconds: 
+Quiz host started on port 9123.
+Players can join from LAN now.
+Type 'start' when ready to begin quiz.
+
+Tester1 connected from 127.0.0.1
+
+Quiz started with 1 players.
+Running question 1/1
+
+Final Results
+=============
+1. Tester1 | score=119 | correct=1 | time=0.01s
+
+
