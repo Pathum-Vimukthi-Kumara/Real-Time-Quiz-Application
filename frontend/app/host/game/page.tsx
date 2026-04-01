@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { quizSocket, Player, Question } from '@/lib/socket';
 import { useToast } from '@/contexts/ToastContext';
 
 function HostGameContent() {
@@ -23,9 +23,7 @@ function HostGameContent() {
     useEffect(() => {
         if (!quizId) { router.push('/host'); return; }
 
-        const serverUrl = getWebSocketUrl();
-
-        quizSocket.connect(serverUrl).then(() => {
+        quizSocket.connect().then(() => {
             setConnected(true);
             quizSocket.send('CREATE_GAME', { quizId });
         }).catch(console.error);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { quizSocket, Player, Question, getWebSocketUrl } from '@/lib/socket';
+import { quizSocket, Player, Question } from '@/lib/socket';
 import { useToast } from '@/contexts/ToastContext';
 
 function PlayGameContent() {
@@ -26,9 +26,7 @@ function PlayGameContent() {
     useEffect(() => {
         if (!pin || !username) { router.push('/'); return; }
 
-        const serverUrl = getWebSocketUrl();
-
-        quizSocket.connect(serverUrl).then(() => {
+        quizSocket.connect().then(() => {
             // Check if we have reconnection data
             const reconnectionData = quizSocket.getReconnectionData();
             

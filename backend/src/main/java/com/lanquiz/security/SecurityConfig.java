@@ -29,7 +29,6 @@ public class SecurityConfig {
             .cors(cors -> {}) // Use existing CORS config
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/api/quizzes").permitAll() // GET all quizzes is public
                 .requestMatchers("/api/quizzes/{id}").permitAll() // GET single quiz is public
                 .anyRequest().authenticated()

@@ -1,64 +1,57 @@
-package com.lanquiz.handler;
+package com.lanquiz.realtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lanquiz.model.GameSession;
 import com.lanquiz.model.Player;
 import com.lanquiz.model.Quiz;
 import com.lanquiz.model.WebSocketMessage;
+import com.lanquiz.security.JwtUtil;
 import com.lanquiz.service.GameService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.PingMessage;
-import org.springframework.web.socket.PongMessage;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class QuizWebSocketHandler extends TextWebSocketHandler {
+public class QuizRealtimeCoordinator {
 
-    private static final Logger logger = LoggerFactory.getLogger(QuizWebSocketHandler.class);
+    private static final Logger logger = LoggerFactory.getLogger(QuizRealtimeCoordinator.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GameService gameService;
+    private final JwtUtil jwtUtil;
 
-    // Maps session pins to connected WebSocket sessions
-    private final Map<String, Set<WebSocketSession>> gameSessions = new ConcurrentHashMap<>();
-    // Maps WebSocket session IDs to game pins
+    private final Map<String, Set<QuizClientSession>> gameSessions = new ConcurrentHashMap<>();
     private final Map<String, String> sessionToGame = new ConcurrentHashMap<>();
-    // Maps WebSocket session IDs to player IDs
     private final Map<String, String> sessionToPlayer = new ConcurrentHashMap<>();
-    // Tracks last pong time for heartbeat monitoring
-    private final Map<String, Long> lastPongTime = new ConcurrentHashMap<>();
-    // Tracks sequence numbers for outgoing messages per session
+    private final Map<String, Long> lastActivityTime = new ConcurrentHashMap<>();
     private final Map<String, Long> sequenceNumbers = new ConcurrentHashMap<>();
-    // Flag to track if server is shutting down
+    private final Set<QuizClientSession> allSessions = ConcurrentHashMap.newKeySet();
     private volatile boolean isShuttingDown = false;
 
-    public QuizWebSocketHandler(GameService gameService) {
+    public QuizRealtimeCoordinator(GameService gameService, JwtUtil jwtUtil) {
         this.gameService = gameService;
+        this.jwtUtil = jwtUtil;
     }
 
-    @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        logger.info("WebSocket connection established: {}", session.getId());
-        lastPongTime.put(session.getId(), System.currentTimeMillis());
+    public void onOpen(QuizClientSession session) {
+        logger.info("TCP quiz connection established: {}", session.getId());
+        allSessions.add(session);
+        lastActivityTime.put(session.getId(), System.currentTimeMillis());
         sequenceNumbers.put(session.getId(), 0L);
     }
 
-    @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    public void onMessage(QuizClientSession session, String line) {
+        lastActivityTime.put(session.getId(), System.currentTimeMillis());
         try {
-            WebSocketMessage wsMessage = objectMapper.readValue(message.getPayload(), WebSocketMessage.class);
+            WebSocketMessage wsMessage = objectMapper.readValue(line, WebSocketMessage.class);
             logger.debug("Received message: {}", wsMessage.getType());
 
             switch (wsMessage.getType()) {
+                case AUTH -> handleAuth(session, wsMessage);
                 case CREATE_GAME -> handleCreateGame(session, wsMessage);
                 case JOIN_GAME -> handleJoinGame(session, wsMessage);
                 case RECONNECT_GAME -> handleReconnectGame(session, wsMessage);
@@ -71,26 +64,81 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             logger.error("Error handling message", e);
-            sendError(session, e.getMessage());
+            try {
+                sendError(session, e.getMessage() != null ? e.getMessage() : "Invalid message");
+            } catch (IOException ignored) {
+                // ignored
+            }
+        }
+    }
+
+    public void onClose(QuizClientSession session) {
+        String pin = sessionToGame.remove(session.getId());
+        String playerId = sessionToPlayer.remove(session.getId());
+        lastActivityTime.remove(session.getId());
+        sequenceNumbers.remove(session.getId());
+        allSessions.remove(session);
+
+        if (pin != null) {
+            Set<QuizClientSession> sessions = gameSessions.get(pin);
+            if (sessions != null) {
+                sessions.remove(session);
+            }
+
+            if (playerId != null) {
+                gameService.removePlayer(pin, playerId);
+
+                WebSocketMessage notification = new WebSocketMessage(
+                        WebSocketMessage.MessageType.PLAYER_LEFT,
+                        Map.of("playerId", playerId),
+                        null,
+                        null);
+                broadcastToGame(pin, notification);
+            }
+        }
+
+        logger.info("TCP quiz connection closed: {}", session.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleAuth(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
+        Map<String, Object> payload = (Map<String, Object>) wsMessage.getPayload();
+        if (payload == null) {
+            sendError(session, "Invalid auth payload");
+            return;
+        }
+        String token = (String) payload.get("token");
+        if (token == null || token.isBlank()) {
+            sendError(session, "Token required for AUTH");
+            return;
+        }
+        try {
+            if (jwtUtil.validateToken(token)) {
+                session.getAttributes().put("userEmail", jwtUtil.extractEmail(token));
+                logger.info("TCP authenticated connection for user: {}", jwtUtil.extractEmail(token));
+            } else {
+                sendError(session, "Invalid JWT token");
+            }
+        } catch (Exception e) {
+            logger.warn("JWT token validation error: {}", e.getMessage());
+            sendError(session, "Invalid JWT token");
         }
     }
 
     @SuppressWarnings("unchecked")
-    private void handleCreateGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
-        // Verify host is authenticated
+    private void handleCreateGame(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         String userEmail = (String) session.getAttributes().get("userEmail");
         if (userEmail == null) {
             sendError(session, "Authentication required");
             return;
         }
-        
+
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String quizId = payload.get("quizId");
         String hostId = session.getId();
 
         GameSession gameSession = gameService.createGame(quizId, hostId);
 
-        // Register host session
         String pin = gameSession.getPin();
         gameSessions.computeIfAbsent(pin, k -> ConcurrentHashMap.newKeySet()).add(session);
         sessionToGame.put(session.getId(), pin);
@@ -105,7 +153,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private void handleJoinGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleJoinGame(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String pin = payload.get("pin");
         String username = payload.get("username");
@@ -114,12 +162,10 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         GameSession gameSession = gameService.joinGame(pin, playerId, username);
         Player player = gameSession.getPlayers().get(playerId);
 
-        // Register player session
         gameSessions.computeIfAbsent(pin, k -> ConcurrentHashMap.newKeySet()).add(session);
         sessionToGame.put(session.getId(), pin);
         sessionToPlayer.put(session.getId(), playerId);
 
-        // Notify the joining player with reconnection token
         WebSocketMessage response = new WebSocketMessage(
                 WebSocketMessage.MessageType.PLAYER_JOINED,
                 Map.of(
@@ -131,12 +177,11 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                 playerId);
         sendMessage(session, response);
 
-        // Broadcast to all players in the game
         broadcastToGame(pin, response);
     }
 
     @SuppressWarnings("unchecked")
-    private void handleReconnectGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleReconnectGame(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         Map<String, String> payload = (Map<String, String>) wsMessage.getPayload();
         String pin = payload.get("pin");
         String reconnectionToken = payload.get("reconnectionToken");
@@ -146,12 +191,10 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
             GameSession gameSession = gameService.reconnectPlayer(pin, reconnectionToken, newSessionId);
             Player player = gameSession.getPlayers().get(newSessionId);
 
-            // Register player session
             gameSessions.computeIfAbsent(pin, k -> ConcurrentHashMap.newKeySet()).add(session);
             sessionToGame.put(session.getId(), pin);
             sessionToPlayer.put(session.getId(), newSessionId);
 
-            // Get current game state
             Map<String, Object> responsePayload = new HashMap<>();
             responsePayload.put("playerId", newSessionId);
             responsePayload.put("username", player.getUsername());
@@ -160,7 +203,6 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
             responsePayload.put("gameState", gameSession.getState());
             responsePayload.put("currentQuestionIndex", gameSession.getCurrentQuestionIndex());
 
-            // If game is in progress, include current question
             if (gameSession.getState() == GameSession.GameState.IN_PROGRESS) {
                 Quiz.Question question = gameService.getCurrentQuestion(pin);
                 Quiz quiz = gameService.getQuiz(gameSession.getQuizId());
@@ -173,7 +215,6 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                 }
             }
 
-            // Notify the reconnected player
             WebSocketMessage response = new WebSocketMessage(
                     WebSocketMessage.MessageType.PLAYER_RECONNECTED,
                     responsePayload,
@@ -181,7 +222,6 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                     newSessionId);
             sendMessage(session, response);
 
-            // Broadcast reconnection to other players
             WebSocketMessage notification = new WebSocketMessage(
                     WebSocketMessage.MessageType.PLAYER_RECONNECTED,
                     Map.of(
@@ -199,7 +239,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleStartGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleStartGame(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         String pin = sessionToGame.get(session.getId());
         if (pin == null) {
             sendError(session, "Not in a game");
@@ -209,7 +249,6 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         GameSession gameSession = gameService.startGame(pin);
         Quiz.Question question = gameService.getCurrentQuestion(pin);
 
-        // Build question payload without correct answer
         Map<String, Object> questionPayload = new HashMap<>();
         questionPayload.put("questionIndex", gameSession.getCurrentQuestionIndex());
         questionPayload.put("questionText", question.getQuestionText());
@@ -229,7 +268,7 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         broadcastToGame(pin, response);
     }
 
-    private void handleSubmitAnswer(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleSubmitAnswer(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         String pin = sessionToGame.get(session.getId());
         String playerId = sessionToPlayer.get(session.getId());
 
@@ -256,13 +295,12 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
                     playerId);
             sendMessage(session, response);
         } catch (RuntimeException e) {
-            // Handle rate limiting and other submission errors
             logger.warn("Answer submission failed for player {}: {}", playerId, e.getMessage());
             sendError(session, e.getMessage());
         }
     }
 
-    private void handleNextQuestion(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleNextQuestion(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         String pin = sessionToGame.get(session.getId());
         if (pin == null) {
             sendError(session, "Not in a game");
@@ -299,14 +337,13 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleEndGame(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
+    private void handleEndGame(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         String pin = sessionToGame.get(session.getId());
         if (pin == null)
             return;
 
-        // Persist game to database and get final leaderboard
         GameSession endedSession = gameService.endGame(pin);
-        
+
         WebSocketMessage response = new WebSocketMessage(
                 WebSocketMessage.MessageType.GAME_ENDED,
                 Map.of("leaderboard", endedSession.getFinalLeaderboard()),
@@ -316,11 +353,10 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private void handleLatencyPing(WebSocketSession session, WebSocketMessage wsMessage) throws IOException {
-        // Echo back the timestamp sent by client for latency calculation
+    private void handleLatencyPing(QuizClientSession session, WebSocketMessage wsMessage) throws IOException {
         Map<String, Object> payload = (Map<String, Object>) wsMessage.getPayload();
         Long clientTimestamp = ((Number) payload.get("timestamp")).longValue();
-        
+
         WebSocketMessage response = new WebSocketMessage(
                 WebSocketMessage.MessageType.LATENCY_PONG,
                 Map.of("clientTimestamp", clientTimestamp, "serverTimestamp", System.currentTimeMillis()),
@@ -329,86 +365,34 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         sendMessage(session, response);
     }
 
-    @Override
-    protected void handlePongMessage(WebSocketSession session, PongMessage message) throws Exception {
-        lastPongTime.put(session.getId(), System.currentTimeMillis());
-        logger.debug("Received pong from session: {}", session.getId());
-    }
-
-    @Scheduled(fixedRate = 15000) // Run every 15 seconds
-    public void sendHeartbeat() {
+    @Scheduled(fixedRate = 15000)
+    public void monitorStaleConnections() {
         long currentTime = System.currentTimeMillis();
-        Set<String> sessionsToRemove = new HashSet<>();
+        Set<String> sessionsToDrop = new HashSet<>();
 
-        // Send ping to all active sessions and check for stale connections
-        for (Map.Entry<String, Set<WebSocketSession>> entry : gameSessions.entrySet()) {
-            Set<WebSocketSession> sessions = entry.getValue();
-            for (WebSocketSession session : sessions) {
-                if (session.isOpen()) {
-                    Long lastPong = lastPongTime.get(session.getId());
-                    
-                    // Close connection if no pong received in 30 seconds
-                    if (lastPong != null && (currentTime - lastPong) > 30000) {
-                        logger.warn("Closing stale connection: {}", session.getId());
-                        sessionsToRemove.add(session.getId());
-                        try {
-                            session.close(CloseStatus.SESSION_NOT_RELIABLE);
-                        } catch (IOException e) {
-                            logger.error("Error closing stale session", e);
-                        }
-                    } else {
-                        // Send ping
-                        try {
-                            session.sendMessage(new PingMessage());
-                            logger.debug("Sent ping to session: {}", session.getId());
-                        } catch (IOException e) {
-                            logger.error("Error sending ping to session: {}", session.getId(), e);
-                        }
-                    }
-                }
+        for (QuizClientSession session : allSessions) {
+            if (!session.isOpen()) {
+                continue;
+            }
+            Long last = lastActivityTime.get(session.getId());
+            if (last != null && (currentTime - last) > 45000) {
+                logger.warn("Closing stale TCP connection: {}", session.getId());
+                sessionsToDrop.add(session.getId());
+                session.close();
             }
         }
 
-        // Clean up stale session tracking data
-        for (String sessionId : sessionsToRemove) {
-            lastPongTime.remove(sessionId);
+        for (String id : sessionsToDrop) {
+            lastActivityTime.remove(id);
         }
-    }
-
-    @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        String pin = sessionToGame.remove(session.getId());
-        String playerId = sessionToPlayer.remove(session.getId());
-        lastPongTime.remove(session.getId());
-        sequenceNumbers.remove(session.getId());
-
-        if (pin != null) {
-            Set<WebSocketSession> sessions = gameSessions.get(pin);
-            if (sessions != null) {
-                sessions.remove(session);
-            }
-
-            if (playerId != null) {
-                gameService.removePlayer(pin, playerId);
-
-                WebSocketMessage notification = new WebSocketMessage(
-                        WebSocketMessage.MessageType.PLAYER_LEFT,
-                        Map.of("playerId", playerId),
-                        null,
-                        null);
-                broadcastToGame(pin, notification);
-            }
-        }
-
-        logger.info("WebSocket connection closed: {}", session.getId());
     }
 
     private void broadcastToGame(String pin, WebSocketMessage message) {
-        Set<WebSocketSession> sessions = gameSessions.get(pin);
+        Set<QuizClientSession> sessions = gameSessions.get(pin);
         if (sessions == null)
             return;
 
-        for (WebSocketSession session : sessions) {
+        for (QuizClientSession session : sessions) {
             if (session.isOpen()) {
                 try {
                     sendMessage(session, message);
@@ -419,23 +403,22 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void sendMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
-        // Only add sequence numbers to game-related messages, not control messages
-        if (message.getType() != WebSocketMessage.MessageType.LATENCY_PONG && 
-            message.getType() != WebSocketMessage.MessageType.ERROR) {
+    private void sendMessage(QuizClientSession session, WebSocketMessage message) throws IOException {
+        if (message.getType() != WebSocketMessage.MessageType.LATENCY_PONG &&
+                message.getType() != WebSocketMessage.MessageType.ERROR) {
             Long seqNum = getNextSequenceNumber(session.getId());
             message.setSequenceNumber(seqNum);
         }
-        
+
         String json = objectMapper.writeValueAsString(message);
-        session.sendMessage(new TextMessage(json));
+        session.sendJson(json);
     }
 
     private Long getNextSequenceNumber(String sessionId) {
         return sequenceNumbers.compute(sessionId, (k, v) -> (v == null ? 0L : v) + 1);
     }
 
-    private void sendError(WebSocketSession session, String errorMessage) throws IOException {
+    private void sendError(QuizClientSession session, String errorMessage) throws IOException {
         logger.warn("Sending error to session {}: {}", session.getId(), errorMessage);
         WebSocketMessage error = new WebSocketMessage(
                 WebSocketMessage.MessageType.ERROR,
@@ -445,47 +428,40 @@ public class QuizWebSocketHandler extends TextWebSocketHandler {
         sendMessage(session, error);
     }
 
-    /**
-     * Gracefully shutdown - notify all connected clients before server stops
-     */
     public void shutdown() {
         if (isShuttingDown) {
-            return; // Already shutting down
+            return;
         }
-        
+
         isShuttingDown = true;
-        logger.info("Initiating graceful shutdown - notifying {} active sessions", 
-                    gameSessions.values().stream().mapToInt(Set::size).sum());
-        
+        logger.info("Initiating graceful shutdown - notifying {} TCP sessions", allSessions.size());
+
         WebSocketMessage shutdownMessage = new WebSocketMessage(
                 WebSocketMessage.MessageType.SERVER_SHUTDOWN,
                 Map.of("message", "Server is shutting down for maintenance. Please reconnect in a few minutes."),
                 null,
                 null);
-        
-        // Broadcast to all active game sessions
-        for (Map.Entry<String, Set<WebSocketSession>> entry : gameSessions.entrySet()) {
-            for (WebSocketSession session : entry.getValue()) {
-                if (session.isOpen()) {
-                    try {
-                        sendMessage(session, shutdownMessage);
-                        // Give client time to receive the message before closing
-                        Thread.sleep(100);
-                        session.close(CloseStatus.GOING_AWAY);
-                    } catch (IOException | InterruptedException e) {
-                        logger.error("Error during graceful shutdown for session {}", session.getId(), e);
-                    }
+
+        for (QuizClientSession session : new ArrayList<>(allSessions)) {
+            if (session.isOpen()) {
+                try {
+                    sendMessage(session, shutdownMessage);
+                    Thread.sleep(100);
+                    session.close();
+                } catch (IOException | InterruptedException e) {
+                    logger.error("Error during graceful shutdown for session {}", session.getId(), e);
+                    Thread.currentThread().interrupt();
                 }
             }
         }
-        
-        // Cleanup all tracking maps
+
         gameSessions.clear();
         sessionToGame.clear();
         sessionToPlayer.clear();
-        lastPongTime.clear();
+        lastActivityTime.clear();
         sequenceNumbers.clear();
-        
+        allSessions.clear();
+
         logger.info("Graceful shutdown complete");
     }
 }
